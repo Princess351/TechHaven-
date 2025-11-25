@@ -7,7 +7,12 @@ from models import Product, Cart, Transaction
 from datetime import datetime
 from models import Customer
 from PyQt6.QtWidgets import QDialog, QFormLayout, QLineEdit, QTextEdit, QPushButton, QVBoxLayout, QMessageBox
-
+from loyalty_points_widget import (
+    LoyaltyCardWidget,
+    MembershipTierWidget,
+    RedeemPointsWidget,
+    PointsHistoryWidget
+)
 
 class CustomerWindow(QMainWindow):
     def __init__(self, db: Database, user):
@@ -54,6 +59,27 @@ class CustomerWindow(QMainWindow):
 
         layout.addLayout(form)
 
+        # ---- CHANGE PASSWORD SECTION ----
+        password_group = QGroupBox("Change Password (optional)")
+        password_layout = QFormLayout()
+
+        self.current_pass_edit = QLineEdit()
+        self.current_pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+        self.new_pass_edit = QLineEdit()
+        self.new_pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+        self.confirm_pass_edit = QLineEdit()
+        self.confirm_pass_edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+        password_layout.addRow("Current Password:", self.current_pass_edit)
+        password_layout.addRow("New Password:", self.new_pass_edit)
+        password_layout.addRow("Confirm Password:", self.confirm_pass_edit)
+
+        password_group.setLayout(password_layout)
+        layout.addWidget(password_group)
+
+
         save_btn = QPushButton("Save")
         save_btn.clicked.connect(lambda: self.save_profile(dialog))
 
@@ -71,6 +97,45 @@ class CustomerWindow(QMainWindow):
             QMessageBox.warning(self, "Error", "Name and Email are required!")
             return
 
+        # ---- HANDLE PASSWORD CHANGE ----
+        current_pw = self.current_pass_edit.text().strip()
+        new_pw = self.new_pass_edit.text().strip()
+        confirm_pw = self.confirm_pass_edit.text().strip()
+
+        if current_pw or new_pw or confirm_pw:
+            # Fields must all be filled
+            if not current_pw or not new_pw or not confirm_pw:
+                QMessageBox.warning(self, "Error", "Please fill all password fields!")
+                return
+
+            if new_pw != confirm_pw:
+                QMessageBox.warning(self, "Error", "New password and confirmation do not match!")
+                return
+
+            # Validate current password
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT password FROM users WHERE user_id = %s",
+                (self.user['user_id'],)
+            )
+            stored_pw = cursor.fetchone()[0]
+
+            if self.db.hash_password(current_pw) != stored_pw:
+                QMessageBox.warning(self, "Error", "Current password is incorrect!")
+                conn.close()
+                return
+
+            # Update password
+            hashed_new_pw = self.db.hash_password(new_pw)
+            cursor.execute(
+                "UPDATE users SET password=%s WHERE user_id=%s",
+                (hashed_new_pw, self.user['user_id'])
+            )
+            conn.commit()
+            conn.close()
+
+        # ---- UPDATE PROFILE INFORMATION ----
         conn = self.db.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
@@ -83,9 +148,8 @@ class CustomerWindow(QMainWindow):
 
         QMessageBox.information(self, "Success", "Profile updated successfully!")
         dialog.accept()
-
-        # Refresh the profile page
         self.refresh_profile()
+
 
     
     def setup_ui(self):
@@ -625,70 +689,94 @@ class CustomerWindow(QMainWindow):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
-        
-        # Header
+        layout.setSpacing(25)
+
+        # -------------------------------------------------------------
+        # HEADER
+        # -------------------------------------------------------------
         title = QLabel("👤 My Profile")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
         title.setStyleSheet("color: #2196F3;")
         layout.addWidget(title)
-        
-        # Create horizontal layout for profile info and loyalty points
-        main_content = QHBoxLayout()
-        
-        # Left side - Profile information
-        profile_section = QWidget()
-        profile_layout = QVBoxLayout(profile_section)
-        
-        # Get customer details
+
+        # -------------------------------------------------------------
+        # GET CUSTOMER INFO
+        # -------------------------------------------------------------
         conn = self.db.get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM customers WHERE customer_id=%s", (self.user['customer_id'],))
         customer = cursor.fetchone()
         conn.close()
-        
-        if customer:
-            info_group = QGroupBox("Personal Information")
-            info_layout = QFormLayout()
-            
-            info_layout.addRow("Full Name:", QLabel(customer[2]))
-            info_layout.addRow("Email:", QLabel(customer[3]))
-            info_layout.addRow("Contact:", QLabel(customer[4] or "N/A"))
-            info_layout.addRow("Address:", QLabel(customer[5] or "N/A"))
-            
-            # Show member type with styling
-            type_label = QLabel(customer[6].upper())
-            if customer[6] == 'vip':
-                type_label.setStyleSheet("color: #FFD700; font-weight: bold;")
-            elif customer[6] == 'premium':
-                type_label.setStyleSheet("color: #C0C0C0; font-weight: bold;")
-            info_layout.addRow("Member Type:", type_label)
-            
-            # Show loyalty points
-            points_label = QLabel(f"{customer[7]:,} points")
-            points_label.setStyleSheet("color: #4CAF50; font-weight: bold; font-size: 14pt;")
-            info_layout.addRow("Loyalty Points:", points_label)
-            
-            info_group.setLayout(info_layout)
-            profile_layout.addWidget(info_group)
-            
-            # Edit profile button
-            edit_btn = QPushButton("✏️ Edit Profile")
-            edit_btn.setMinimumHeight(45)
-            edit_btn.clicked.connect(self.edit_profile)
-            profile_layout.addWidget(edit_btn)
-        
-        profile_layout.addStretch()
-        main_content.addWidget(profile_section, 1)
-    
-        # Right side - Loyalty points widget
-        from loyalty_points_widget import LoyaltyPointsWidget
-        loyalty_widget = LoyaltyPointsWidget(self, self.db, self.user['customer_id'])
-        main_content.addWidget(loyalty_widget, 1)
-        
-        layout.addLayout(main_content)
-        
+
+        # -------------------------------------------------------------
+        # MAIN CONTENT: LEFT + RIGHT GRID
+        # -------------------------------------------------------------
+        grid = QGridLayout()
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setHorizontalSpacing(40)
+        grid.setVerticalSpacing(25)
+
+        # -------------------------------------------------------------
+        # LEFT COLUMN
+        # -------------------------------------------------------------
+        left_col = QVBoxLayout()
+        left_col.setSpacing(20)
+
+        # --- Personal Info Box ---
+        personal_group = QGroupBox("Personal Information")
+        info_form = QFormLayout(personal_group)
+        info_form.addRow("Full Name:", QLabel(customer[2]))
+        info_form.addRow("Email:", QLabel(customer[3]))
+        info_form.addRow("Contact:", QLabel(customer[4] or "N/A"))
+        info_form.addRow("Address:", QLabel(customer[5] or "N/A"))
+        info_form.addRow("Member Type:", QLabel(customer[6].upper()))
+        info_form.addRow("Loyalty Points:", QLabel(f"{customer[7]} points"))
+        left_col.addWidget(personal_group)
+
+        # --- Edit Profile Button ---
+        edit_btn = QPushButton("✏️ Edit Profile")
+        edit_btn.setMinimumHeight(45)
+        edit_btn.clicked.connect(self.edit_profile)
+        left_col.addWidget(edit_btn)
+
+        # --- Loyalty Card (ONLY gradient card) ---
+        loyalty_card = LoyaltyCardWidget(self.db, self.user["customer_id"])
+        left_col.addWidget(loyalty_card)
+
+        left_col.addStretch()
+
+        # -------------------------------------------------------------
+        # RIGHT COLUMN
+        # -------------------------------------------------------------
+        right_col = QVBoxLayout()
+        right_col.setSpacing(25)
+
+        # --- Membership Tiers ---
+
+        tiers = MembershipTierWidget()
+        right_col.addWidget(tiers)
+
+        # --- Redeem Points ---
+        redeem = RedeemPointsWidget(self.db, self.user["customer_id"])
+        right_col.addWidget(redeem)
+
+        # --- Points History ---
+        history = PointsHistoryWidget(self.db, self.user["customer_id"])
+        right_col.addWidget(history)
+
+        right_col.addStretch()
+
+        # -------------------------------------------------------------
+        # ADD COLUMNS TO GRID
+        # -------------------------------------------------------------
+        grid.addLayout(left_col, 0, 0)
+        grid.addLayout(right_col, 0, 1)
+
+        layout.addLayout(grid)
         return page
+
+
 
     def refresh_profile(self):
         """Refresh profile page data"""
@@ -805,29 +893,46 @@ class CustomerCheckoutDialog(QDialog):
         self.available_points = result[0] if result else 0
 
         self.setWindowTitle("Checkout")
-        self.setMinimumSize(600, 600)
+        self.setMinimumSize(650, 600)  # Reduced from 800 - no spacer needed
         self.setup_ui()
         self.calculate_totals()
     
     def setup_ui(self):
+        # Main layout with minimal margins for more space
         layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(10)  # Reduced from 15
+        layout.setContentsMargins(15, 15, 15, 15)  # Reduced from 20
         
+        # Title (stays at top, outside scroll)
         title = QLabel("💳 Checkout")
-        title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 16, QFont.Weight.Bold))  # Reduced from 20
         title.setStyleSheet("color: #2196F3;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
+        # ===== SCROLL AREA FOR CONTENT =====
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Content widget (everything that scrolls)
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setSpacing(20)
+        content_layout.setContentsMargins(5, 5, 5, 5)
+        
         # Delivery info
         delivery_group = QGroupBox("Delivery Information")
         delivery_layout = QFormLayout()
+        delivery_layout.setSpacing(12)
+        delivery_layout.setContentsMargins(15, 15, 15, 15)
         
         # customer indices:
         # 4 = contact (phone), 5 = address
         self.address_input = QTextEdit()
-        self.address_input.setMaximumHeight(80)
+        self.address_input.setMaximumHeight(70)
         self.address_input.setText(self.customer[5] or "")
         delivery_layout.addRow("Address:", self.address_input)
         
@@ -836,11 +941,13 @@ class CustomerCheckoutDialog(QDialog):
         delivery_layout.addRow("Phone:", self.phone_input)
         
         delivery_group.setLayout(delivery_layout)
-        layout.addWidget(delivery_group)
+        content_layout.addWidget(delivery_group)
         
         # Order summary
         summary_group = QGroupBox("Order Summary")
         summary_layout = QVBoxLayout()
+        summary_layout.setSpacing(8)
+        summary_layout.setContentsMargins(15, 15, 15, 15)
         
         for item in self.cart_items:
             line_total = Decimal(str(item['price'])) * item['quantity']
@@ -848,16 +955,18 @@ class CustomerCheckoutDialog(QDialog):
             summary_layout.addWidget(item_label)
         
         summary_group.setLayout(summary_layout)
-        layout.addWidget(summary_group)
+        content_layout.addWidget(summary_group)
         
         # Totals
         self.totals_label = QLabel()
-        self.totals_label.setFont(QFont("Arial", 12))
-        layout.addWidget(self.totals_label)
+        self.totals_label.setFont(QFont("Arial", 11))
+        content_layout.addWidget(self.totals_label)
         
         # Payment method
         payment_group = QGroupBox("Payment Method")
         payment_layout = QVBoxLayout()
+        payment_layout.setSpacing(15)
+        payment_layout.setContentsMargins(15, 15, 15, 15)
         
         self.payment_combo = QComboBox()
         self.payment_combo.addItems(["Cash on Delivery", "Credit Card", "Debit Card", "Digital Wallet"])
@@ -867,6 +976,10 @@ class CustomerCheckoutDialog(QDialog):
         # Card payment fields
         self.card_widget = QWidget()
         card_layout = QFormLayout(self.card_widget)
+        card_layout.setSpacing(15)
+        card_layout.setContentsMargins(15, 15, 15, 15)
+        card_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        
         self.card_number = QLineEdit()
         self.card_number.setPlaceholderText("1234 5678 9012 3456")
         self.card_number.setMaxLength(19)
@@ -876,42 +989,141 @@ class CustomerCheckoutDialog(QDialog):
         self.card_name.setPlaceholderText("Name on Card")
         card_layout.addRow("Cardholder Name:", self.card_name)
         
-        card_exp_layout = QHBoxLayout()
+        # Expiry and CVV in horizontal layout
+        card_exp_cvv_widget = QWidget()
+        card_exp_cvv_layout = QHBoxLayout(card_exp_cvv_widget)
+        card_exp_cvv_layout.setContentsMargins(0, 0, 0, 0)
+        card_exp_cvv_layout.setSpacing(20)
+        
+        # Expiry container
+        expiry_container = QWidget()
+        expiry_layout = QHBoxLayout(expiry_container)
+        expiry_layout.setContentsMargins(0, 0, 0, 0)
+        expiry_layout.setSpacing(5)
+        
         self.card_exp_month = QComboBox()
         self.card_exp_month.addItems([f"{i:02d}" for i in range(1, 13)])
+        self.card_exp_month.setFixedWidth(70)
+        
         self.card_exp_year = QComboBox()
         self.card_exp_year.addItems([str(2025 + i) for i in range(10)])
-        card_exp_layout.addWidget(self.card_exp_month)
-        card_exp_layout.addWidget(QLabel("/"))
-        card_exp_layout.addWidget(self.card_exp_year)
-        card_layout.addRow("Expiry:", card_exp_layout)
+        self.card_exp_year.setFixedWidth(90)
+        
+        expiry_layout.addWidget(QLabel("Expiry:"))
+        expiry_layout.addWidget(self.card_exp_month)
+        expiry_layout.addWidget(QLabel("/"))
+        expiry_layout.addWidget(self.card_exp_year)
+        
+        # CVV container
+        cvv_container = QWidget()
+        cvv_layout = QHBoxLayout(cvv_container)
+        cvv_layout.setContentsMargins(0, 0, 0, 0)
+        cvv_layout.setSpacing(5)
         
         self.card_cvv = QLineEdit()
         self.card_cvv.setPlaceholderText("123")
         self.card_cvv.setMaxLength(4)
-        self.card_cvv.setMaximumWidth(100)
-        card_layout.addRow("CVV:", self.card_cvv)
+        self.card_cvv.setFixedWidth(80)
         
+        cvv_layout.addWidget(QLabel("CVV:"))
+        cvv_layout.addWidget(self.card_cvv)
+        
+        card_exp_cvv_layout.addWidget(expiry_container)
+        card_exp_cvv_layout.addWidget(cvv_container)
+        card_exp_cvv_layout.addStretch()
+        
+        card_layout.addRow("", card_exp_cvv_widget)
+        
+        # Style the card widget
+        self.card_widget.setStyleSheet("""
+            QWidget {
+                background-color: #f8f9fa;
+                border: 2px solid #2196F3;
+                border-radius: 8px;
+            }
+            QLabel {
+                background: transparent;
+                font-weight: bold;
+                color: #333;
+                font-size: 10pt;
+            }
+            QLineEdit, QComboBox {
+                background-color: white;
+                border: 2px solid #2196F3;
+                border-radius: 4px;
+                padding: 10px;
+                font-size: 10pt;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border: 2px solid #1976D2;
+                background-color: #E3F2FD;
+            }
+        """)
+        
+        self.card_widget.setMinimumHeight(200)
         payment_layout.addWidget(self.card_widget)
-        payment_group.setLayout(payment_layout)
-        layout.addWidget(payment_group)
         
-        # Buttons
-        button_layout = QHBoxLayout()
+        payment_group.setLayout(payment_layout)
+        content_layout.addWidget(payment_group)
+        
+        # Add content to scroll area
+        scroll_area.setWidget(content_widget)
+        scroll_area.setMaximumHeight(350)  # Good size for scrollable content
+        scroll_area.setMinimumHeight(350)  # Force fixed height
+        layout.addWidget(scroll_area)  # NO stretch factor - use fixed height only
+        
+        # ===== SEPARATOR LINE ABOVE BUTTONS =====
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet("background-color: #ddd; max-height: 1px;")
+        layout.addWidget(separator)
+        
+        # ===== BUTTONS (stay at bottom, outside scroll) =====
+        button_container = QWidget()
+        button_container.setFixedHeight(70)  # Increased from 60 to 70
+        button_container.setStyleSheet("""
+            background-color: #f5f5f5;
+            border-top: 2px solid #2196F3;
+        """)
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setSpacing(15)
+        button_layout.setContentsMargins(10, 10, 10, 10)  # More padding
         
         self.complete_btn = QPushButton("✓ Place Order")
-        self.complete_btn.setMinimumHeight(50)
-        self.complete_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        self.complete_btn.setMinimumHeight(40)  # Reduced from 45
+        self.complete_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        self.complete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
         self.complete_btn.clicked.connect(self.complete_order)
         button_layout.addWidget(self.complete_btn)
         
         cancel_btn = QPushButton("✗ Cancel")
-        cancel_btn.setMinimumHeight(50)
-        cancel_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        cancel_btn.setMinimumHeight(40)  # Reduced from 45
+        cancel_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336;
+                color: white;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #D32F2F;
+            }
+        """)
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
-        layout.addLayout(button_layout)
+        layout.addWidget(button_container)  # Add button container with fixed height
         
         self.payment_method_changed("Cash on Delivery")
     
