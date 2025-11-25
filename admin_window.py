@@ -16,7 +16,7 @@ class AdminWindow(QMainWindow):
         self.transaction_model = Transaction(db)
         
         self.setWindowTitle(f"TechHaven - Admin Dashboard ({user['full_name']})")
-        self.setMinimumSize(1200, 700)
+        self.setMinimumSize(1280, 700)
         self.setup_ui()
         self.apply_styles()
     
@@ -217,6 +217,10 @@ class AdminWindow(QMainWindow):
             "ID", "Name", "Description", "Price", "Stock", "Category", "Threshold", "Actions"
         ])
         self.products_table.horizontalHeader().setStretchLastSection(True)
+        
+        # Set column widths to make room for bigger buttons
+        self.products_table.setColumnWidth(7, 200)  # Actions column wider
+        
         layout.addWidget(self.products_table)
         
         self.refresh_products()
@@ -225,6 +229,10 @@ class AdminWindow(QMainWindow):
     def refresh_products(self):
         products = self.product_model.get_all_products()
         self.products_table.setRowCount(len(products))
+        
+        # Set row height to accommodate larger buttons
+        for i in range(len(products)):
+            self.products_table.setRowHeight(i, 60)
         
         for row, product in enumerate(products):
             self.products_table.setItem(row, 0, QTableWidgetItem(str(product[0])))
@@ -235,24 +243,62 @@ class AdminWindow(QMainWindow):
             stock_item = QTableWidgetItem(str(product[4]))
             if product[4] <= product[6]:
                 stock_item.setForeground(Qt.GlobalColor.red)
+            stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.products_table.setItem(row, 4, stock_item)
             
             self.products_table.setItem(row, 5, QTableWidgetItem(product[5] or ""))
             self.products_table.setItem(row, 6, QTableWidgetItem(str(product[6])))
             
-            # Action buttons
+            # ===== IMPROVED ACTION BUTTONS WITH VISIBLE TEXT =====
             action_widget = QWidget()
             action_layout = QHBoxLayout(action_widget)
-            action_layout.setContentsMargins(5, 5, 5, 5)
+            action_layout.setContentsMargins(8, 5, 8, 5)
+            action_layout.setSpacing(10)
             
-            edit_btn = QPushButton("✏️")
-            edit_btn.setMaximumWidth(40)
+            # Edit Button - Blue with clear text
+            edit_btn = QPushButton("Edit")
+            edit_btn.setFixedSize(90, 38)
+            edit_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 11pt;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+                QPushButton:pressed {
+                    background-color: #0D47A1;
+                }
+            """)
             edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             edit_btn.clicked.connect(lambda checked, p=product: self.edit_product(p))
             action_layout.addWidget(edit_btn)
             
-            delete_btn = QPushButton("🗑️")
-            delete_btn.setMaximumWidth(40)
+            # Delete Button - Red with clear text
+            delete_btn = QPushButton("Delete")
+            delete_btn.setFixedSize(90, 38)
+            delete_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #f44336;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 11pt;
+                }
+                QPushButton:hover {
+                    background-color: #d32f2f;
+                }
+                QPushButton:pressed {
+                    background-color: #b71c1c;
+                }
+            """)
             delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             delete_btn.clicked.connect(lambda checked, pid=product[0]: self.delete_product(pid))
             action_layout.addWidget(delete_btn)
@@ -322,27 +368,71 @@ class AdminWindow(QMainWindow):
         customers = self.customer_model.get_all_customers()
         self.customers_table.setRowCount(len(customers))
         
+        # Set column width for Actions column
+        self.customers_table.setColumnWidth(6, 180)
+        
+        # Set row height to accommodate larger buttons
+        for i in range(len(customers)):
+            self.customers_table.setRowHeight(i, 50)
+        
         for row, customer in enumerate(customers):
             self.customers_table.setItem(row, 0, QTableWidgetItem(str(customer[0])))
-            self.customers_table.setItem(row, 1, QTableWidgetItem(customer[1]))
-            self.customers_table.setItem(row, 2, QTableWidgetItem(customer[2] or ""))
-            self.customers_table.setItem(row, 3, QTableWidgetItem(customer[3] or ""))
-            self.customers_table.setItem(row, 4, QTableWidgetItem(customer[5]))
-            self.customers_table.setItem(row, 5, QTableWidgetItem(str(customer[6])))
+            self.customers_table.setItem(row, 1, QTableWidgetItem(customer[2]))
+            self.customers_table.setItem(row, 2, QTableWidgetItem(customer[3] or ""))
+            self.customers_table.setItem(row, 3, QTableWidgetItem(customer[4] or ""))
+            self.customers_table.setItem(row, 4, QTableWidgetItem(customer[6]))
+            self.customers_table.setItem(row, 5, QTableWidgetItem(str(customer[7] if len(customer) > 7 else 0)))
             
-            # Action buttons
+            # ===== STYLED ACTION BUTTONS FOR CUSTOMERS =====
             action_widget = QWidget()
             action_layout = QHBoxLayout(action_widget)
-            action_layout.setContentsMargins(5, 5, 5, 5)
+            action_layout.setContentsMargins(8, 5, 8, 5)
+            action_layout.setSpacing(10)
             
-            edit_btn = QPushButton("✏️")
-            edit_btn.setMaximumWidth(40)
+            # Edit Button - Blue
+            edit_btn = QPushButton("Edit")
+            edit_btn.setFixedSize(70, 38)
+            edit_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 10pt;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+                QPushButton:pressed {
+                    background-color: #0D47A1;
+                }
+            """)
             edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             edit_btn.clicked.connect(lambda checked, c=customer: self.edit_customer(c))
             action_layout.addWidget(edit_btn)
             
-            history_btn = QPushButton("📜")
-            history_btn.setMaximumWidth(40)
+            # History Button - Purple
+            history_btn = QPushButton("History")
+            history_btn.setFixedSize(75, 38)
+            history_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            history_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #9C27B0;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 10pt;
+                }
+                QPushButton:hover {
+                    background-color: #7B1FA2;
+                }
+                QPushButton:pressed {
+                    background-color: #6A1B9A;
+                }
+            """)
             history_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             history_btn.clicked.connect(lambda checked, cid=customer[0]: self.view_customer_history(cid))
             action_layout.addWidget(history_btn)
@@ -376,7 +466,7 @@ class AdminWindow(QMainWindow):
             table.setItem(row, 0, QTableWidgetItem(str(trans[0])))
             table.setItem(row, 1, QTableWidgetItem(trans[8]))
             table.setItem(row, 2, QTableWidgetItem(f"${trans[3]:.2f}"))
-            table.setItem(row, 3, QTableWidgetItem(trans[7] or "N/A"))
+            table.setItem(row, 3, QTableWidgetItem(trans[6] or "N/A"))
             table.setItem(row, 4, QTableWidgetItem(trans[9] if len(trans) > 9 else "N/A"))
         
         table.horizontalHeader().setStretchLastSection(True)
@@ -432,33 +522,99 @@ class AdminWindow(QMainWindow):
         staff = self.staff_model.get_all_staff()
         self.staff_table.setRowCount(len(staff))
         
+        # Set column width for Actions column
+        self.staff_table.setColumnWidth(5, 200)
+        
+        # Set row height to accommodate larger buttons
+        for i in range(len(staff)):
+            self.staff_table.setRowHeight(i, 60)
+        
         for row, member in enumerate(staff):
             self.staff_table.setItem(row, 0, QTableWidgetItem(str(member[0])))
             self.staff_table.setItem(row, 1, QTableWidgetItem(member[1]))
             self.staff_table.setItem(row, 2, QTableWidgetItem(member[2]))
-            self.staff_table.setItem(row, 3, QTableWidgetItem(member[3] or ""))
-            self.staff_table.setItem(row, 4, QTableWidgetItem(member[4]))
+            self.staff_table.setItem(row, 3, QTableWidgetItem(member[3]))
+            self.staff_table.setItem(row, 4, QTableWidgetItem(member[4].upper()))
             
-            # Action button
-            if member[0] != self.user['user_id']:  # Can't delete yourself
-                delete_btn = QPushButton("🗑️ Delete")
-                delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                delete_btn.clicked.connect(lambda checked, uid=member[0]: self.delete_staff(uid))
-                self.staff_table.setCellWidget(row, 5, delete_btn)
+            # ===== STYLED ACTION BUTTONS FOR STAFF =====
+            action_widget = QWidget()
+            action_layout = QHBoxLayout(action_widget)
+            action_layout.setContentsMargins(8, 5, 8, 5)
+            action_layout.setSpacing(10)
+            
+            # Edit Button - Blue with clear text
+            edit_btn = QPushButton("Edit")
+            edit_btn.setFixedSize(90, 38)
+            edit_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            edit_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 11pt;
+                }
+                QPushButton:hover {
+                    background-color: #1976D2;
+                }
+                QPushButton:pressed {
+                    background-color: #0D47A1;
+                }
+            """)
+            edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            edit_btn.clicked.connect(lambda checked, s=member: self.edit_staff(s))
+            action_layout.addWidget(edit_btn)
+            
+            # Delete Button - Red with clear text
+            delete_btn = QPushButton("Delete")
+            delete_btn.setFixedSize(90, 38)
+            delete_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #f44336;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 11pt;
+                }
+                QPushButton:hover {
+                    background-color: #d32f2f;
+                }
+                QPushButton:pressed {
+                    background-color: #b71c1c;
+                }
+            """)
+            delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            delete_btn.clicked.connect(lambda checked, sid=member[0]: self.delete_staff(sid))
+            action_layout.addWidget(delete_btn)
+            
+            self.staff_table.setCellWidget(row, 5, action_widget)
     
     def add_staff(self):
         dialog = StaffDialog(self.db, self)
         if dialog.exec():
             self.refresh_staff()
     
-    def delete_staff(self, user_id):
-        reply = QMessageBox.question(self, "Confirm Delete",
+    def edit_staff(self, staff_member):
+        dialog = StaffEditDialog(self.db, self, staff_member)
+        if dialog.exec():
+            self.refresh_staff()
+    
+    def delete_staff(self, staff_id):
+        # Prevent deleting the current admin
+        if staff_id == self.user['user_id']:
+            QMessageBox.warning(self, "Error", "Cannot delete yourself!")
+            return
+        
+        reply = QMessageBox.question(self, "Confirm Delete", 
                                      "Are you sure you want to delete this staff member?",
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
-            self.staff_model.delete_staff(user_id)
+            self.staff_model.delete_staff(staff_id)
             self.refresh_staff()
-            QMessageBox.information(self, "Success", "Staff member deleted successfully!")
+            QMessageBox.information(self, "Success", "Staff deleted successfully!")
     
     def create_reports_page(self):
         page = QWidget()
@@ -485,27 +641,23 @@ class AdminWindow(QMainWindow):
         self.end_date.setDate(datetime.now().date())
         date_layout.addWidget(self.end_date)
         
-        generate_btn = QPushButton("📊 Generate Report")
+        generate_btn = QPushButton("Generate Report")
         generate_btn.clicked.connect(self.generate_report)
         date_layout.addWidget(generate_btn)
         date_layout.addStretch()
         
         layout.addLayout(date_layout)
         
-        # Report display
+        # Report table
         self.report_table = QTableWidget()
         self.report_table.setColumnCount(6)
         self.report_table.setHorizontalHeaderLabels([
-            "Transaction ID", "Date", "Customer", "Staff", "Total", "Payment Method"
+            "Date", "Transaction ID", "Customer", "Staff", "Total", "Payment"
         ])
         self.report_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.report_table)
         
-        # Summary
-        self.summary_label = QLabel("")
-        self.summary_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        layout.addWidget(self.summary_label)
-        
+        layout.addStretch()
         return page
     
     def generate_report(self):
@@ -517,17 +669,17 @@ class AdminWindow(QMainWindow):
         
         total_sales = 0
         for row, trans in enumerate(transactions):
-            self.report_table.setItem(row, 0, QTableWidgetItem(str(trans[0])))
-            self.report_table.setItem(row, 1, QTableWidgetItem(trans[8]))
-            self.report_table.setItem(row, 2, QTableWidgetItem(str(trans[1]) if trans[1] else "Walk-in"))
-            self.report_table.setItem(row, 3, QTableWidgetItem(str(trans[2]) if trans[2] else "N/A"))
+            self.report_table.setItem(row, 0, QTableWidgetItem(trans[8]))
+            self.report_table.setItem(row, 1, QTableWidgetItem(str(trans[0])))
+            self.report_table.setItem(row, 2, QTableWidgetItem(str(trans[1] or "Walk-in")))
+            self.report_table.setItem(row, 3, QTableWidgetItem(str(trans[2] or "N/A")))
             self.report_table.setItem(row, 4, QTableWidgetItem(f"${trans[3]:.2f}"))
-            self.report_table.setItem(row, 5, QTableWidgetItem(trans[7] or "N/A"))
+            self.report_table.setItem(row, 5, QTableWidgetItem(trans[6] or "N/A"))
             total_sales += trans[3]
         
-        self.summary_label.setText(
-            f"Total Transactions: {len(transactions)} | Total Sales: ${total_sales:.2f}"
-        )
+        QMessageBox.information(self, "Report Generated", 
+                               f"Total transactions: {len(transactions)}\n"
+                               f"Total sales: ${total_sales:.2f}")
     
     def apply_styles(self):
         self.setStyleSheet("""
@@ -541,32 +693,23 @@ class AdminWindow(QMainWindow):
                 background-color: transparent;
                 color: white;
                 border: none;
-                padding: 15px;
                 text-align: left;
+                padding: 15px 20px;
                 font-size: 12pt;
             }
             #sidebar QPushButton:hover {
-                background-color: #1976D2;
+                background-color: rgba(255, 255, 255, 0.1);
             }
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 20px;
-                font-size: 11pt;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
+            #sidebar QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.2);
             }
             QTableWidget {
                 background-color: white;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                gridline-color: #e0e0e0;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
             }
             QTableWidget::item {
-                padding: 8px;
+                padding: 5px;
             }
             QHeaderView::section {
                 background-color: #2196F3;
@@ -574,6 +717,16 @@ class AdminWindow(QMainWindow):
                 padding: 10px;
                 border: none;
                 font-weight: bold;
+            }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
             }
         """)
     
@@ -587,81 +740,87 @@ class AdminWindow(QMainWindow):
             self.login_window.show()
             self.close()
 
-# Dialog classes for Add/Edit operations
+# Dialog classes
 class ProductDialog(QDialog):
     def __init__(self, db, parent, product=None):
         super().__init__(parent)
         self.db = db
         self.product = product
         self.product_model = Product(db)
+        
         self.setWindowTitle("Edit Product" if product else "Add Product")
-        self.setFixedSize(500, 550)
+        self.setMinimumSize(500, 400)
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QFormLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
         
         self.name_input = QLineEdit()
-        self.description_input = QTextEdit()
-        self.description_input.setMaximumHeight(80)
+        form.addRow("Name:", self.name_input)
+        
+        self.desc_input = QTextEdit()
+        self.desc_input.setMaximumHeight(80)
+        form.addRow("Description:", self.desc_input)
+        
         self.price_input = QDoubleSpinBox()
-        self.price_input.setMaximum(99999.99)
+        self.price_input.setMaximum(999999.99)
         self.price_input.setPrefix("$")
+        form.addRow("Price:", self.price_input)
+        
         self.stock_input = QSpinBox()
-        self.stock_input.setMaximum(99999)
+        self.stock_input.setMaximum(999999)
+        form.addRow("Stock:", self.stock_input)
+        
         self.category_input = QComboBox()
         self.category_input.addItems(["Computers", "Smartphones", "Audio", "TVs", "Tablets", 
-                                      "Cameras", "Accessories", "Wearables", "Monitors", "Gaming"])
-        self.category_input.setEditable(True)
-        self.threshold_input = QSpinBox()
-        self.threshold_input.setMaximum(999)
-        self.threshold_input.setValue(10)
+                                     "Cameras", "Accessories", "Wearables", "Monitors", "Gaming"])
+        form.addRow("Category:", self.category_input)
         
+        self.threshold_input = QSpinBox()
+        self.threshold_input.setValue(10)
+        form.addRow("Low Stock Threshold:", self.threshold_input)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.save)
+        button_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        # Load existing data
         if self.product:
             self.name_input.setText(self.product[1])
-            self.description_input.setText(self.product[2] or "")
+            self.desc_input.setText(self.product[2] or "")
             self.price_input.setValue(self.product[3])
             self.stock_input.setValue(self.product[4])
             self.category_input.setCurrentText(self.product[5] or "")
             self.threshold_input.setValue(self.product[6])
-        
-        layout.addRow("Name:", self.name_input)
-        layout.addRow("Description:", self.description_input)
-        layout.addRow("Price:", self.price_input)
-        layout.addRow("Stock:", self.stock_input)
-        layout.addRow("Category:", self.category_input)
-        layout.addRow("Low Stock Threshold:", self.threshold_input)
-        
-        button_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Save")
-        save_btn.clicked.connect(self.save)
-        cancel_btn = QPushButton("✗ Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(save_btn)
-        button_layout.addWidget(cancel_btn)
-        
-        layout.addRow("", button_layout)
     
     def save(self):
         name = self.name_input.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Validation Error", "Product name is required!")
-            return
-        
-        description = self.description_input.toPlainText().strip()
+        desc = self.desc_input.toPlainText().strip()
         price = self.price_input.value()
         stock = self.stock_input.value()
-        category = self.category_input.currentText().strip()
+        category = self.category_input.currentText()
         threshold = self.threshold_input.value()
         
+        if not name:
+            QMessageBox.warning(self, "Error", "Product name is required!")
+            return
+        
         if self.product:
-            self.product_model.update_product(self.product[0], name, description, price, 
-                                             stock, category, threshold)
+            self.product_model.update_product(self.product[0], name, desc, price, stock, category, threshold)
             QMessageBox.information(self, "Success", "Product updated successfully!")
         else:
-            self.product_model.add_product(name, description, price, stock, category, threshold)
+            self.product_model.add_product(name, desc, price, stock, category, threshold)
             QMessageBox.information(self, "Success", "Product added successfully!")
         
         self.accept()
@@ -672,63 +831,70 @@ class CustomerDialog(QDialog):
         self.db = db
         self.customer = customer
         self.customer_model = Customer(db)
+        
         self.setWindowTitle("Edit Customer" if customer else "Add Customer")
-        self.setFixedSize(500, 450)
+        self.setMinimumSize(400, 300)
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QFormLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
         
         self.name_input = QLineEdit()
+        form.addRow("Full Name:", self.name_input)
+        
         self.email_input = QLineEdit()
+        form.addRow("Email:", self.email_input)
+        
         self.phone_input = QLineEdit()
+        form.addRow("Phone:", self.phone_input)
+        
         self.address_input = QTextEdit()
-        self.address_input.setMaximumHeight(80)
+        self.address_input.setMaximumHeight(60)
+        form.addRow("Address:", self.address_input)
+        
         self.type_input = QComboBox()
         self.type_input.addItems(["regular", "vip", "student"])
+        form.addRow("Type:", self.type_input)
         
-        if self.customer:
-            self.name_input.setText(self.customer[1])
-            self.email_input.setText(self.customer[2] or "")
-            self.phone_input.setText(self.customer[3] or "")
-            self.address_input.setText(self.customer[4] or "")
-            self.type_input.setCurrentText(self.customer[5])
+        layout.addLayout(form)
         
-        layout.addRow("Full Name:", self.name_input)
-        layout.addRow("Email:", self.email_input)
-        layout.addRow("Phone:", self.phone_input)
-        layout.addRow("Address:", self.address_input)
-        layout.addRow("Customer Type:", self.type_input)
-        
+        # Buttons
         button_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Save")
+        save_btn = QPushButton("Save")
         save_btn.clicked.connect(self.save)
-        cancel_btn = QPushButton("✗ Cancel")
-        cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
-        layout.addRow("", button_layout)
+        layout.addLayout(button_layout)
+        
+        # Load existing data
+        if self.customer:
+            self.name_input.setText(self.customer[2])
+            self.email_input.setText(self.customer[3] or "")
+            self.phone_input.setText(self.customer[4] or "")
+            self.address_input.setText(self.customer[5] or "")
+            self.type_input.setCurrentText(self.customer[6])
     
     def save(self):
         name = self.name_input.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Validation Error", "Customer name is required!")
-            return
-        
         email = self.email_input.text().strip()
         phone = self.phone_input.text().strip()
         address = self.address_input.toPlainText().strip()
-        customer_type = self.type_input.currentText()
+        ctype = self.type_input.currentText()
+        
+        if not name or not email:
+            QMessageBox.warning(self, "Error", "Name and email are required!")
+            return
         
         if self.customer:
-            self.customer_model.update_customer(self.customer[0], name, email, phone, 
-                                               address, customer_type)
+            self.customer_model.update_customer(self.customer[0], name, email, phone, address, ctype)
             QMessageBox.information(self, "Success", "Customer updated successfully!")
         else:
-            self.customer_model.add_customer(name, email, phone, address, customer_type)
+            self.customer_model.add_customer(name, email, phone, address, ctype)
             QMessageBox.information(self, "Success", "Customer added successfully!")
         
         self.accept()
@@ -738,38 +904,45 @@ class StaffDialog(QDialog):
         super().__init__(parent)
         self.db = db
         self.staff_model = StaffManagement(db)
+        
         self.setWindowTitle("Add Staff Member")
-        self.setFixedSize(500, 450)
+        self.setMinimumSize(400, 350)
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QFormLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
         
         self.username_input = QLineEdit()
+        form.addRow("Username:", self.username_input)
+        
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("Password:", self.password_input)
+        
         self.name_input = QLineEdit()
+        form.addRow("Full Name:", self.name_input)
+        
         self.email_input = QLineEdit()
+        form.addRow("Email:", self.email_input)
+        
         self.role_input = QComboBox()
-        self.role_input.addItems(["admin", "staff", "cashier"])
+        self.role_input.addItems(["staff", "cashier", "admin"])
+        form.addRow("Role:", self.role_input)
         
-        layout.addRow("Username:", self.username_input)
-        layout.addRow("Password:", self.password_input)
-        layout.addRow("Full Name:", self.name_input)
-        layout.addRow("Email:", self.email_input)
-        layout.addRow("Role:", self.role_input)
+        layout.addLayout(form)
         
+        # Buttons
         button_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Save")
+        save_btn = QPushButton("Add Staff")
         save_btn.clicked.connect(self.save)
-        cancel_btn = QPushButton("✗ Cancel")
-        cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
-        layout.addRow("", button_layout)
+        layout.addLayout(button_layout)
     
     def save(self):
         username = self.username_input.text().strip()
@@ -778,18 +951,138 @@ class StaffDialog(QDialog):
         email = self.email_input.text().strip()
         role = self.role_input.currentText()
         
-        if not all([username, password, name]):
-            QMessageBox.warning(self, "Validation Error", "Username, password, and name are required!")
+        if not all([username, password, name, email]):
+            QMessageBox.warning(self, "Error", "All fields are required!")
             return
         
         if len(password) < 6:
-            QMessageBox.warning(self, "Weak Password", "Password must be at least 6 characters!")
+            QMessageBox.warning(self, "Error", "Password must be at least 6 characters!")
             return
         
         success, message = self.staff_model.add_staff(username, password, name, email, role)
-        
         if success:
             QMessageBox.information(self, "Success", message)
             self.accept()
         else:
             QMessageBox.critical(self, "Error", message)
+
+class StaffEditDialog(QDialog):
+    def __init__(self, db, parent, staff_member):
+        super().__init__(parent)
+        self.db = db
+        self.staff_member = staff_member
+        self.staff_model = StaffManagement(db)
+        
+        self.setWindowTitle("Edit Staff Member")
+        self.setMinimumSize(400, 300)
+        self.setup_ui()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        
+        # Username (read-only)
+        self.username_label = QLabel(self.staff_member[1])
+        self.username_label.setStyleSheet("font-weight: bold; color: #666;")
+        form.addRow("Username:", self.username_label)
+        
+        self.name_input = QLineEdit()
+        self.name_input.setText(self.staff_member[2])
+        form.addRow("Full Name:", self.name_input)
+        
+        self.email_input = QLineEdit()
+        self.email_input.setText(self.staff_member[3])
+        form.addRow("Email:", self.email_input)
+        
+        self.role_input = QComboBox()
+        self.role_input.addItems(["staff", "cashier", "admin"])
+        self.role_input.setCurrentText(self.staff_member[4])
+        form.addRow("Role:", self.role_input)
+        
+        # Optional password change
+        self.new_password_input = QLineEdit()
+        self.new_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.new_password_input.setPlaceholderText("Leave blank to keep current password")
+        form.addRow("New Password:", self.new_password_input)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        save_btn = QPushButton("Save Changes")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        save_btn.clicked.connect(self.save)
+        button_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+    
+    def save(self):
+        name = self.name_input.text().strip()
+        email = self.email_input.text().strip()
+        role = self.role_input.currentText()
+        new_password = self.new_password_input.text().strip()
+        
+        if not all([name, email]):
+            QMessageBox.warning(self, "Error", "Name and email are required!")
+            return
+        
+        if new_password and len(new_password) < 6:
+            QMessageBox.warning(self, "Error", "New password must be at least 6 characters!")
+            return
+        
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            # Update basic info
+            cursor.execute("""
+                UPDATE users 
+                SET full_name=?, email=?, role=?
+                WHERE user_id=?
+            """, (name, email, role, self.staff_member[0]))
+            
+            # Update password if provided
+            if new_password:
+                hashed_password = self.db.hash_password(new_password)
+                cursor.execute("""
+                    UPDATE users 
+                    SET password=?
+                    WHERE user_id=?
+                """, (hashed_password, self.staff_member[0]))
+            
+            conn.commit()
+            conn.close()
+            
+            QMessageBox.information(self, "Success", "Staff member updated successfully!")
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Update failed: {str(e)}")
