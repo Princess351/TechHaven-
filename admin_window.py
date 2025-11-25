@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QColor
 from database import Database
 from models import Product, Customer, StaffManagement, Transaction
 from datetime import datetime
+from models import ReportGenerator
 
 class AdminWindow(QMainWindow):
     def __init__(self, db: Database, user):
@@ -621,44 +622,86 @@ class AdminWindow(QMainWindow):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
-        
-        title = QLabel("📈 Sales Reports")
+    
+        # Title
+        title = QLabel("📈 Business Reports")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
         title.setStyleSheet("color: #2196F3;")
         layout.addWidget(title)
+    
+        # Description
+        desc = QLabel("Generate comprehensive business reports with export capabilities")
+        desc.setStyleSheet("color: #666; font-size: 12pt;")
+        layout.addWidget(desc)
+    
+        # Open comprehensive reports button
+        comprehensive_btn = QPushButton("📊 Open Comprehensive Reports Dashboard")
+        comprehensive_btn.setMinimumHeight(80)
+        comprehensive_btn.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        comprehensive_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 10px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        comprehensive_btn.clicked.connect(self.open_comprehensive_reports)
+        layout.addWidget(comprehensive_btn)
+    
+        # Quick report buttons
+        quick_reports_layout = QGridLayout()
         
-        # Date range selection
-        date_layout = QHBoxLayout()
-        date_layout.addWidget(QLabel("From:"))
-        self.start_date = QDateEdit()
-        self.start_date.setCalendarPopup(True)
-        self.start_date.setDate(datetime.now().date())
-        date_layout.addWidget(self.start_date)
+        daily_btn = QPushButton("📅 Daily Sales Report")
+        daily_btn.setMinimumHeight(60)
+        daily_btn.clicked.connect(self.quick_daily_report)
+        quick_reports_layout.addWidget(daily_btn, 0, 0)
         
-        date_layout.addWidget(QLabel("To:"))
-        self.end_date = QDateEdit()
-        self.end_date.setCalendarPopup(True)
-        self.end_date.setDate(datetime.now().date())
-        date_layout.addWidget(self.end_date)
+        customer_btn = QPushButton("👥 Customer Type Report")
+        customer_btn.setMinimumHeight(60)
+        customer_btn.clicked.connect(self.quick_customer_report)
+        quick_reports_layout.addWidget(customer_btn, 0, 1)
         
-        generate_btn = QPushButton("Generate Report")
-        generate_btn.clicked.connect(self.generate_report)
-        date_layout.addWidget(generate_btn)
-        date_layout.addStretch()
-        
-        layout.addLayout(date_layout)
-        
-        # Report table
-        self.report_table = QTableWidget()
-        self.report_table.setColumnCount(6)
-        self.report_table.setHorizontalHeaderLabels([
-            "Date", "Transaction ID", "Customer", "Staff", "Total", "Payment"
-        ])
-        self.report_table.horizontalHeader().setStretchLastSection(True)
-        layout.addWidget(self.report_table)
-        
+        inventory_btn = QPushButton("📦 Inventory Report")
+        inventory_btn.setMinimumHeight(60)
+        inventory_btn.clicked.connect(self.quick_inventory_report)
+        quick_reports_layout.addWidget(inventory_btn, 1, 0)
+    
+        layout.addLayout(quick_reports_layout)
         layout.addStretch()
+        
         return page
+
+    def open_comprehensive_reports(self):
+        """Open comprehensive reports dialog"""
+        from comprehensive_reports import ComprehensiveReportsDialog
+        dialog = ComprehensiveReportsDialog(self, self.db)
+        dialog.exec()
+
+    def quick_daily_report(self):
+        """Generate quick daily sales report"""
+        report_gen = ReportGenerator(self.db)
+        data = report_gen.generate_daily_sales_report()
+        
+        msg = f"""
+        Daily Sales Report - {data['date']}
+        
+        Total Sales: ${data['total_sales']:.2f}
+        Total Transactions: {data['total_transactions']}
+        Total Items Sold: {data['total_items_sold']}
+        Average Transaction: ${data['average_transaction']:.2f}
+        """
+        QMessageBox.information(self, "Daily Sales Report", msg)
+
+    def quick_customer_report(self):
+        """Generate quick customer type report"""
+        self.open_comprehensive_reports()
+
+    def quick_inventory_report(self):
+        """Generate quick inventory report"""
+        self.open_comprehensive_reports()
     
     def generate_report(self):
         start = self.start_date.date().toString("yyyy-MM-dd")
