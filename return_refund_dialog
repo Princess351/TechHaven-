@@ -1,0 +1,342 @@
+from decimal import Decimal
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
+    QGroupBox, QTextEdit, QFormLayout, QComboBox, QTableWidget, 
+    QTableWidgetItem, QWidget, QHBoxLayout, QSpinBox, QCheckBox, QMessageBox
+)
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
+from models import ReturnRefund
+from models import Transaction
+
+
+class ReturnRefundDialog(QDialog):
+    """Dialog for processing returns and refunds"""
+    def __init__(self, parent, db, staff_user):
+        super().__init__(parent)
+        self.db = db
+        self.staff_user = staff_user
+        self.return_model = ReturnRefund(db)
+        self.original_transaction = None
+
+        self.setWindowTitle("Process Return/Refund")
+        self.setMinimumSize(800, 600)
+
+        self.setup_ui()
+        self.apply_styles()
+
+    # ---------------------------------------------------
+    # UI SETUP
+    # ---------------------------------------------------
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        # Title ---------------------------------------------------
+        title = QLabel("🔄 Process Return/Refund")
+        title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        title.setStyleSheet("color: #2196F3;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        # Lookup group --------------------------------------------
+        lookup_group = QGroupBox("Original Transaction")
+        lookup_layout = QHBoxLayout()
+
+        self.transaction_input = QLineEdit()
+        self.transaction_input.setPlaceholderText("Enter Transaction ID")
+
+        lookup_layout.addWidget(QLabel("Transaction ID:"))
+        lookup_layout.addWidget(self.transaction_input)
+
+        lookup_btn = QPushButton("🔍 Lookup")
+        lookup_btn.clicked.connect(self.lookup_transaction)
+        lookup_layout.addWidget(lookup_btn)
+
+        lookup_group.setLayout(lookup_layout)
+        layout.addWidget(lookup_group)
+
+        # Transaction details group --------------------------------
+        self.details_group = QGroupBox("Transaction Details")
+        self.details_group.setVisible(False)
+        details_layout = QVBoxLayout()
+
+        self.details_label = QLabel()
+        self.details_label.setWordWrap(True)
+        details_layout.addWidget(self.details_label)
+
+        self.details_group.setLayout(details_layout)
+        layout.addWidget(self.details_group)
+
+        # Items table ----------------------------------------------
+        self.items_group = QGroupBox("Select Items to Return")
+        self.items_group.setVisible(False)
+
+        items_layout = QVBoxLayout()
+        self.items_table = QTableWidget()
+        self.items_table.setColumnCount(6)
+        self.items_table.setHorizontalHeaderLabels([
+            "Select", "Product", "Quantity Purchased",
+            "Unit Price", "Qty to Return", "Subtotal"
+        ])
+        self.items_table.horizontalHeader().setStretchLastSection(True)
+        items_layout.addWidget(self.items_table)
+
+        self.items_group.setLayout(items_layout)
+        layout.addWidget(self.items_group)
+
+        # Refund summary group -------------------------------------
+        self.refund_group = QGroupBox("Refund Details")
+        self.refund_group.setVisible(False)
+        refund_layout = QVBoxLayout()
+
+        # Reason form
+        reason_layout = QFormLayout()
+        self.reason_input = QTextEdit()
+        self.reason_input.setMaximumHeight(80)
+        reason_layout.addRow("Reason:", self.reason_input)
+
+        self.refund_method = QComboBox()
+        self.refund_method.addItems(["Original Payment", "Store Credit", "Cash", "Check"])
+        reason_layout.addRow("Refund Method:", self.refund_method)
+
+        refund_layout.addLayout(reason_layout)
+
+        # Refund summary labels (CRITICAL)
+        self.subtotal_label = QLabel("Subtotal: $0.00")
+        self.subtotal_label.setStyleSheet("font-size: 12pt;")
+
+        self.tax_label = QLabel("Tax (10%): $0.00")
+        self.tax_label.setStyleSheet("font-size: 12pt;")
+
+        self.total_label = QLabel("Total Refund: $0.00")
+        self.total_label.setStyleSheet("font-weight: bold; font-size: 14pt; color: #4CAF50;")
+
+        refund_layout.addWidget(self.subtotal_label)
+        refund_layout.addWidget(self.tax_label)
+        refund_layout.addWidget(self.total_label)
+
+        self.refund_group.setLayout(refund_layout)
+        layout.addWidget(self.refund_group)
+
+        # Buttons ---------------------------------------------------
+        button_layout = QHBoxLayout()
+
+        self.process_btn = QPushButton("✓ Process Refund")
+        self.process_btn.setMinimumHeight(50)
+        self.process_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        self.process_btn.setEnabled(False)
+        self.process_btn.clicked.connect(self.process_refund)
+
+        cancel_btn = QPushButton("✗ Cancel")
+        cancel_btn.setMinimumHeight(50)
+        cancel_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        cancel_btn.clicked.connect(self.reject)
+
+        button_layout.addWidget(self.process_btn)
+        button_layout.addWidget(cancel_btn)
+
+        layout.addLayout(button_layout)
+
+    # ---------------------------------------------------
+    # UI Styling
+    # ---------------------------------------------------
+    def apply_styles(self):
+        self.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #2196F3;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+
+        self.process_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """)
+
+    # ---------------------------------------------------
+    # Lookup Transaction
+    # ---------------------------------------------------
+    def lookup_transaction(self):
+        transaction_id = self.transaction_input.text().strip()
+
+        if not transaction_id.isdigit():
+            QMessageBox.warning(self, "Invalid Input", "Enter a valid numeric transaction ID.")
+            return
+
+        model = Transaction(self.db)
+        transaction, items = model.get_transaction(int(transaction_id))
+
+        if not transaction:
+            QMessageBox.warning(self, "Not Found", "Transaction not found.")
+            return
+
+        if transaction[7] != 'sale':
+            QMessageBox.warning(self, "Invalid", "Only sale transactions can be refunded.")
+            return
+
+        self.original_transaction = transaction
+
+        self.display_transaction_details(transaction, items)
+        self.populate_items_table(items)
+
+        self.details_group.setVisible(True)
+        self.items_group.setVisible(True)
+        self.refund_group.setVisible(True)
+        self.process_btn.setEnabled(True)
+
+    # ---------------------------------------------------
+    # Display Transaction Details
+    # ---------------------------------------------------
+    def display_transaction_details(self, transaction, items):
+        self.details_label.setText(f"""
+            <b>Transaction ID:</b> {transaction[0]}<br>
+            <b>Date:</b> {transaction[8]}<br>
+            <b>Customer:</b> {transaction[9] or 'Walk-in'}<br>
+            <b>Staff:</b> {transaction[10]}<br>
+            <b>Total Amount:</b> ${transaction[3]:.2f}<br>
+            <b>Payment Method:</b> {transaction[6]}
+        """)
+
+    # ---------------------------------------------------
+    # Populate Items Table
+    # ---------------------------------------------------
+    def populate_items_table(self, items):
+        self.items_table.setRowCount(len(items))
+
+        for row, item in enumerate(items):
+            # Checkbox
+            checkbox = QCheckBox()
+            checkbox.setChecked(True)
+
+            wrapper = QWidget()
+            layout = QHBoxLayout(wrapper)
+            layout.addWidget(checkbox)
+            layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.setContentsMargins(0, 0, 0, 0)
+
+            self.items_table.setCellWidget(row, 0, wrapper)
+
+            # Product name
+            self.items_table.setItem(row, 1, QTableWidgetItem(item[6]))
+
+            # Qty purchased
+            self.items_table.setItem(row, 2, QTableWidgetItem(str(item[3])))
+
+            # Unit price
+            self.items_table.setItem(row, 3, QTableWidgetItem(f"${item[4]:.2f}"))
+
+            # Qty to return spinbox
+            spin = QSpinBox()
+            spin.setMinimum(0)
+            spin.setMaximum(item[3])
+            spin.setValue(item[3])
+            spin.valueChanged.connect(self.calculate_refund_total)
+            self.items_table.setCellWidget(row, 4, spin)
+
+            # Subtotal
+            self.items_table.setItem(row, 5, QTableWidgetItem(f"${item[5]:.2f}"))
+
+        self.calculate_refund_total()
+
+    # ---------------------------------------------------
+    # Calculate Refund Total
+    # ---------------------------------------------------
+    def calculate_refund_total(self):
+        total_refund = Decimal("0.00")
+
+        for row in range(self.items_table.rowCount()):
+            widget = self.items_table.cellWidget(row, 0)
+            checkbox = widget.findChild(QCheckBox)
+
+            if not checkbox or not checkbox.isChecked():
+                continue
+
+            spinbox = self.items_table.cellWidget(row, 4)
+            qty = Decimal(str(spinbox.value()))
+
+            price_text = self.items_table.item(row, 3).text().replace("$", "")
+            price = Decimal(price_text)
+
+            total_refund += qty * price
+
+        tax = total_refund * Decimal("0.10")
+        grand_total = total_refund + tax
+
+        self.refund_amount = total_refund
+        self.refund_tax = tax
+        self.refund_total = grand_total
+
+        self.subtotal_label.setText(f"Subtotal: ${total_refund:.2f}")
+        self.tax_label.setText(f"Tax (10%): ${tax:.2f}")
+        self.total_label.setText(f"Total Refund: ${grand_total:.2f}")
+
+    # ---------------------------------------------------
+    # Process Refund
+    # ---------------------------------------------------
+    def process_refund(self):
+        reason = self.reason_input.toPlainText().strip()
+
+        if not reason:
+            QMessageBox.warning(self, "Missing", "Please enter a reason.")
+            return
+
+        items_to_return = []
+
+        model = Transaction(self.db)
+        _, original_items = model.get_transaction(self.original_transaction[0])
+
+        for row in range(self.items_table.rowCount()):
+            widget = self.items_table.cellWidget(row, 0)
+            checkbox = widget.findChild(QCheckBox)
+
+            if not checkbox or not checkbox.isChecked():
+                continue
+
+            spinbox = self.items_table.cellWidget(row, 4)
+            qty = spinbox.value()
+
+            if qty > 0:
+                item = original_items[row]
+                items_to_return.append({
+                    "product_id": item[2],
+                    "quantity": qty,
+                    "price": item[4],
+                    "name": item[6],
+                })
+
+        if not items_to_return:
+            QMessageBox.warning(self, "No Items", "Select at least one item.")
+            return
+
+        success, message = self.return_model.process_return(
+            self.original_transaction[0],
+            items_to_return,
+            reason,
+            self.staff_user["user_id"],
+            self.refund_method.currentText()
+        )
+
+        if success:
+            QMessageBox.information(self, "Success", message)
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error", message)
