@@ -113,9 +113,11 @@ class Database:
                 transaction_type VARCHAR(20) DEFAULT 'sale',
                 transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_transactions_customer
-                    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+                    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+                    ON DELETE SET NULL,
                 CONSTRAINT fk_transactions_staff
                     FOREIGN KEY (staff_id) REFERENCES users(user_id)
+                    ON DELETE SET NULL
             ) ENGINE=InnoDB
         """)
 
