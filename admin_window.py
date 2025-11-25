@@ -5,6 +5,11 @@ from database import Database
 from models import Product, Customer, StaffManagement, Transaction
 from datetime import datetime
 from models import ReportGenerator
+from styles import (COLORS, FONTS, SPACING, HEIGHTS, 
+                    create_button, create_label, create_section_title,
+                    get_sidebar_stylesheet, get_global_stylesheet)
+from responsive_utils import (ResponsiveFormDialog, ResponsiveDialog, 
+                               create_search_box, create_compact_toolbar)
 
 class AdminWindow(QMainWindow):
     def __init__(self, db: Database, user):
@@ -19,7 +24,7 @@ class AdminWindow(QMainWindow):
         self.setWindowTitle(f"TechHaven - Admin Dashboard ({user['full_name']})")
         self.setMinimumSize(1280, 700)
         self.setup_ui()
-        self.apply_styles()
+        self.setStyleSheet(get_sidebar_stylesheet() + get_global_stylesheet())
     
     def setup_ui(self):
         central_widget = QWidget()
@@ -724,55 +729,6 @@ class AdminWindow(QMainWindow):
                                f"Total transactions: {len(transactions)}\n"
                                f"Total sales: ${total_sales:.2f}")
     
-    def apply_styles(self):
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            #sidebar {
-                background-color: #2196F3;
-            }
-            #sidebar QPushButton {
-                background-color: transparent;
-                color: white;
-                border: none;
-                text-align: left;
-                padding: 15px 20px;
-                font-size: 12pt;
-            }
-            #sidebar QPushButton:hover {
-                background-color: rgba(255, 255, 255, 0.1);
-            }
-            #sidebar QPushButton:pressed {
-                background-color: rgba(255, 255, 255, 0.2);
-            }
-            QTableWidget {
-                background-color: white;
-                border: 1px solid #e0e0e0;
-                border-radius: 5px;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
-            QHeaderView::section {
-                background-color: #2196F3;
-                color: white;
-                padding: 10px;
-                border: none;
-                font-weight: bold;
-            }
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-    
     def logout(self):
         reply = QMessageBox.question(self, "Logout", 
                                      "Are you sure you want to logout?",
@@ -1129,3 +1085,15 @@ class StaffEditDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Update failed: {str(e)}")
+
+    def resizeEvent(self, event):
+        """Handle window resize"""
+        super().resizeEvent(event)
+        # Resize all tables
+        for attr in dir(self):
+            try:
+                widget = getattr(self, attr)
+                if isinstance(widget, QTableWidget):
+                    widget.resizeColumnsToContents()
+            except:
+                pass
