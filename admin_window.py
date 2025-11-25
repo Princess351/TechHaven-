@@ -1,15 +1,12 @@
+from decimal import Decimal
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
 from database import Database
 from models import Product, Customer, StaffManagement, Transaction
 from datetime import datetime
 from models import ReportGenerator
-from styles import (COLORS, FONTS, SPACING, HEIGHTS, 
-                    create_button, create_label, create_section_title,
-                    get_sidebar_stylesheet, get_global_stylesheet)
-from responsive_utils import (ResponsiveFormDialog, ResponsiveDialog, 
-                               create_search_box, create_compact_toolbar)
+from PyQt6.QtWidgets import QHeaderView
 
 class AdminWindow(QMainWindow):
     def __init__(self, db: Database, user):
@@ -22,9 +19,9 @@ class AdminWindow(QMainWindow):
         self.transaction_model = Transaction(db)
         
         self.setWindowTitle(f"TechHaven - Admin Dashboard ({user['full_name']})")
-        self.setMinimumSize(1280, 700)
+        self.setMinimumSize(1280, 650)
         self.setup_ui()
-        self.setStyleSheet(get_sidebar_stylesheet() + get_global_stylesheet())
+        self.apply_styles()
     
     def setup_ui(self):
         central_widget = QWidget()
@@ -364,8 +361,28 @@ class AdminWindow(QMainWindow):
         self.customers_table.setHorizontalHeaderLabels([
             "ID", "Name", "Email", "Phone", "Type", "Loyalty Points", "Actions"
         ])
-        self.customers_table.horizontalHeader().setStretchLastSection(True)
+
+        # --- NEW: fixed, sensible widths for each column ---
+        header = self.customers_table.horizontalHeader()
+
+        # use fixed widths instead of stretch
+        for col in range(7):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+
+        # tweak these numbers to taste
+        self.customers_table.setColumnWidth(0, 60)   # ID
+        self.customers_table.setColumnWidth(1, 150)  # Name
+        self.customers_table.setColumnWidth(2, 150)  # Email
+        self.customers_table.setColumnWidth(3, 120)  # Phone
+        self.customers_table.setColumnWidth(4, 100)  # Type
+        self.customers_table.setColumnWidth(5, 120)  # Loyalty Points
+        self.customers_table.setColumnWidth(6, 220)  # Actions (big enough for 2 buttons)
+
+        # make rows tall enough so buttons look nice
+        self.customers_table.verticalHeader().setDefaultSectionSize(80)
+
         layout.addWidget(self.customers_table)
+
         
         self.refresh_customers()
         return page
@@ -375,7 +392,7 @@ class AdminWindow(QMainWindow):
         self.customers_table.setRowCount(len(customers))
         
         # Set column width for Actions column
-        self.customers_table.setColumnWidth(6, 180)
+        self.customers_table.setColumnWidth(6, 250)
         
         # Set row height to accommodate larger buttons
         for i in range(len(customers)):
@@ -392,12 +409,15 @@ class AdminWindow(QMainWindow):
             # ===== STYLED ACTION BUTTONS FOR CUSTOMERS =====
             action_widget = QWidget()
             action_layout = QHBoxLayout(action_widget)
-            action_layout.setContentsMargins(8, 5, 8, 5)
-            action_layout.setSpacing(10)
+            action_layout.setContentsMargins(0, 0, 0, 0)
+            action_layout.setSpacing(8)
+            action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)   # ★ added line
+
+
             
             # Edit Button - Blue
             edit_btn = QPushButton("Edit")
-            edit_btn.setFixedSize(70, 38)
+            edit_btn.setFixedSize(90, 38)
             edit_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             edit_btn.setStyleSheet("""
                 QPushButton {
@@ -421,7 +441,7 @@ class AdminWindow(QMainWindow):
             
             # History Button - Purple
             history_btn = QPushButton("History")
-            history_btn.setFixedSize(75, 38)
+            history_btn.setFixedSize(90, 38)
             history_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
             history_btn.setStyleSheet("""
                 QPushButton {
@@ -459,30 +479,50 @@ class AdminWindow(QMainWindow):
         history = self.customer_model.get_customer_history(customer_id)
         dialog = QDialog(self)
         dialog.setWindowTitle("Customer Purchase History")
-        dialog.setMinimumSize(800, 500)
-        
+        dialog.setMinimumSize(900, 500)
+
         layout = QVBoxLayout(dialog)
-        
+
         table = QTableWidget()
         table.setColumnCount(5)
         table.setHorizontalHeaderLabels(["Transaction ID", "Date", "Total", "Payment Method", "Staff"])
         table.setRowCount(len(history))
-        
+
+        # ---- FIX CUT TEXT (ROW HEIGHT + WORD WRAP + AUTO RESIZE) ----
+        from PyQt6.QtWidgets import QHeaderView
+        table.verticalHeader().setDefaultSectionSize(45)
+        table.setWordWrap(True)
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        table.setStyleSheet("""
+            QTableWidget::item {
+                padding: 6px;
+                font-size: 11pt;
+            }
+        """)
+
+        # Fill rows safely
         for row, trans in enumerate(history):
-            table.setItem(row, 0, QTableWidgetItem(str(trans[0])))
-            table.setItem(row, 1, QTableWidgetItem(trans[8]))
-            table.setItem(row, 2, QTableWidgetItem(f"${trans[3]:.2f}"))
-            table.setItem(row, 3, QTableWidgetItem(trans[6] or "N/A"))
-            table.setItem(row, 4, QTableWidgetItem(trans[9] if len(trans) > 9 else "N/A"))
-        
-        table.horizontalHeader().setStretchLastSection(True)
+            transaction_id = trans[0]
+            date = str(trans[8]) if len(trans) > 8 else ""
+            total = trans[3] if len(trans) > 3 else 0
+
+            payment_method = trans[6] if len(trans) > 6 else "N/A"
+            staff_name = trans[10] if len(trans) > 10 and trans[10] else "SELF-Checkout"
+
+            table.setItem(row, 0, QTableWidgetItem(str(transaction_id)))
+            table.setItem(row, 1, QTableWidgetItem(date))
+            table.setItem(row, 2, QTableWidgetItem(f"${total:.2f}"))
+            table.setItem(row, 3, QTableWidgetItem(payment_method))
+            table.setItem(row, 4, QTableWidgetItem(staff_name))
+
         layout.addWidget(table)
-        
+
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(dialog.accept)
         layout.addWidget(close_btn)
-        
+
         dialog.exec()
+
     
     def create_staff_page(self):
         page = QWidget()
@@ -518,22 +558,38 @@ class AdminWindow(QMainWindow):
         self.staff_table.setHorizontalHeaderLabels([
             "ID", "Username", "Full Name", "Email", "Role", "Actions"
         ])
-        self.staff_table.horizontalHeader().setStretchLastSection(True)
+
+        
+        from PyQt6.QtWidgets import QHeaderView
+        header = self.staff_table.horizontalHeader()
+        
+        for col in range(6):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+
+        self.staff_table.setColumnWidth(0, 60)
+        self.staff_table.setColumnWidth(1, 140)
+        self.staff_table.setColumnWidth(2, 160)
+        self.staff_table.setColumnWidth(3, 200)
+        self.staff_table.setColumnWidth(4, 120)
+        self.staff_table.setColumnWidth(5, 260)
+      
+
         layout.addWidget(self.staff_table)
         
         self.refresh_staff()
         return page
+
     
     def refresh_staff(self):
         staff = self.staff_model.get_all_staff()
         self.staff_table.setRowCount(len(staff))
         
         # Set column width for Actions column
-        self.staff_table.setColumnWidth(5, 200)
+        self.staff_table.setColumnWidth(5, 260)
         
         # Set row height to accommodate larger buttons
         for i in range(len(staff)):
-            self.staff_table.setRowHeight(i, 60)
+            self.staff_table.setRowHeight(i, 50)
         
         for row, member in enumerate(staff):
             self.staff_table.setItem(row, 0, QTableWidgetItem(str(member[0])))
@@ -545,8 +601,10 @@ class AdminWindow(QMainWindow):
             # ===== STYLED ACTION BUTTONS FOR STAFF =====
             action_widget = QWidget()
             action_layout = QHBoxLayout(action_widget)
-            action_layout.setContentsMargins(8, 5, 8, 5)
-            action_layout.setSpacing(10)
+            action_layout.setContentsMargins(0, 0, 0, 0)
+            action_layout.setSpacing(8)
+            action_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)   # ★ NEW ★
+
             
             # Edit Button - Blue with clear text
             edit_btn = QPushButton("Edit")
@@ -559,7 +617,7 @@ class AdminWindow(QMainWindow):
                     border: none;
                     border-radius: 6px;
                     font-weight: bold;
-                    font-size: 11pt;
+                    font-size: 10pt;
                 }
                 QPushButton:hover {
                     background-color: #1976D2;
@@ -583,7 +641,7 @@ class AdminWindow(QMainWindow):
                     border: none;
                     border-radius: 6px;
                     font-weight: bold;
-                    font-size: 11pt;
+                    font-size: 10pt;
                 }
                 QPushButton:hover {
                     background-color: #d32f2f;
@@ -625,59 +683,83 @@ class AdminWindow(QMainWindow):
     def create_reports_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
-    
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(30)
+
         # Title
-        title = QLabel("📈 Business Reports")
-        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title.setStyleSheet("color: #2196F3;")
+        title = QLabel("📊 Business Reports")
+        title.setFont(QFont("Arial", 28, QFont.Weight.Bold))
+        title.setStyleSheet("color: #1976D2;")
         layout.addWidget(title)
-    
-        # Description
-        desc = QLabel("Generate comprehensive business reports with export capabilities")
-        desc.setStyleSheet("color: #666; font-size: 12pt;")
-        layout.addWidget(desc)
-    
-        # Open comprehensive reports button
-        comprehensive_btn = QPushButton("📊 Open Comprehensive Reports Dashboard")
-        comprehensive_btn.setMinimumHeight(80)
-        comprehensive_btn.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        comprehensive_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border-radius: 10px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        comprehensive_btn.clicked.connect(self.open_comprehensive_reports)
-        layout.addWidget(comprehensive_btn)
-    
-        # Quick report buttons
-        quick_reports_layout = QGridLayout()
+
+        subtitle = QLabel("Generate comprehensive business reports with export capabilities")
+        subtitle.setStyleSheet("font-size: 14px; color: #666;")
+        layout.addWidget(subtitle)
+
+        # ===== Button Factory (allows custom colors) =====
+        def create_color_button(text, icon, color, hover_color, callback):
+            btn = QPushButton(f"{icon}   {text}")
+            btn.setMinimumHeight(80)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color};
+                    border-radius: 18px;
+                    color: white;
+                    padding: 18px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hover_color};
+                }}
+            """)
+
+            if callback:
+                btn.clicked.connect(callback)
+
+            return btn
+
+        # ===== Each Button Has Its Own Color =====
         
-        daily_btn = QPushButton("📅 Daily Sales Report")
-        daily_btn.setMinimumHeight(60)
-        daily_btn.clicked.connect(self.quick_daily_report)
-        quick_reports_layout.addWidget(daily_btn, 0, 0)
-        
-        customer_btn = QPushButton("👥 Customer Type Report")
-        customer_btn.setMinimumHeight(60)
-        customer_btn.clicked.connect(self.quick_customer_report)
-        quick_reports_layout.addWidget(customer_btn, 0, 1)
-        
-        inventory_btn = QPushButton("📦 Inventory Report")
-        inventory_btn.setMinimumHeight(60)
-        inventory_btn.clicked.connect(self.quick_inventory_report)
-        quick_reports_layout.addWidget(inventory_btn, 1, 0)
-    
-        layout.addLayout(quick_reports_layout)
+        # GREEN – Primary main report
+        open_dash_btn = create_color_button(
+            "Open Comprehensive Reports Dashboard", "📘",
+            "#43A047", "#388E3C", self.open_comprehensive_reports
+        )
+        layout.addWidget(open_dash_btn)
+
+        # Row for two half-width buttons
+        row = QHBoxLayout()
+        row.setSpacing(25)
+
+        # BLUE – Daily Sales Report
+        daily_btn = create_color_button(
+            "Daily Sales Report", "📅",
+            "#1976D2", "#1565C0", self.quick_daily_report
+        )
+        row.addWidget(daily_btn)
+
+        # PURPLE – Customer Type Report
+        customer_btn = create_color_button(
+            "Customer Type Report", "👥",
+            "#8E24AA", "#7B1FA2", self.quick_customer_report
+        )
+        row.addWidget(customer_btn)
+
+        layout.addLayout(row)
+
+        # ORANGE – Inventory Report
+        inventory_btn = create_color_button(
+            "Inventory Report", "📦",
+            "#FB8C00", "#EF6C00", self.quick_inventory_report
+        )
+        inventory_btn.setMinimumHeight(80)
+        layout.addWidget(inventory_btn)
+
         layout.addStretch()
-        
         return page
+
 
     def open_comprehensive_reports(self):
         """Open comprehensive reports dialog"""
@@ -701,12 +783,50 @@ class AdminWindow(QMainWindow):
         QMessageBox.information(self, "Daily Sales Report", msg)
 
     def quick_customer_report(self):
-        """Generate quick customer type report"""
-        self.open_comprehensive_reports()
+        """Generate quick customer type report (NOT comprehensive)"""
+        report_gen = ReportGenerator(self.db)
+
+        # last 30 days
+        start = QDate.currentDate().addDays(-30).toString("yyyy-MM-dd")
+        end = QDate.currentDate().toString("yyyy-MM-dd")
+
+        data = report_gen.generate_revenue_by_customer_type_report(start, end)
+        breakdown = data["breakdown"]
+
+        total_rev = sum(row[2] for row in breakdown)
+        total_trans = sum(row[1] for row in breakdown)
+
+        msg = f"""
+    Revenue by Customer Type (Last 30 Days)
+
+    Total Revenue: ${total_rev:.2f}
+    Total Transactions: {total_trans}
+
+    Breakdown:
+    """
+
+        for row in breakdown:
+            msg += f"\n• {row[0].upper()}: {row[1]} transactions — ${row[2]:.2f}"
+
+        QMessageBox.information(self, "Customer Type Report", msg)
+
 
     def quick_inventory_report(self):
         """Generate quick inventory report"""
-        self.open_comprehensive_reports()
+        report_gen = ReportGenerator(self.db)
+        data = report_gen.generate_inventory_status_report()
+
+        msg = f"""
+    Inventory Status Report
+
+    Total Products: {data['total_products']}
+    In Stock: {data['in_stock']}
+    Low Stock: {data['low_stock']}
+    Out of Stock: {data['out_of_stock']}
+    Total Inventory Value: ${data['total_inventory_value']:.2f}
+    """
+
+        QMessageBox.information(self, "Inventory Report", msg)
     
     def generate_report(self):
         start = self.start_date.date().toString("yyyy-MM-dd")
@@ -720,7 +840,7 @@ class AdminWindow(QMainWindow):
             self.report_table.setItem(row, 0, QTableWidgetItem(trans[8]))
             self.report_table.setItem(row, 1, QTableWidgetItem(str(trans[0])))
             self.report_table.setItem(row, 2, QTableWidgetItem(str(trans[1] or "Walk-in")))
-            self.report_table.setItem(row, 3, QTableWidgetItem(str(trans[2] or "N/A")))
+            self.report_table.setItem(row, 3, QTableWidgetItem(str(trans[2] or "Self-Checkout")))
             self.report_table.setItem(row, 4, QTableWidgetItem(f"${trans[3]:.2f}"))
             self.report_table.setItem(row, 5, QTableWidgetItem(trans[6] or "N/A"))
             total_sales += trans[3]
@@ -728,6 +848,55 @@ class AdminWindow(QMainWindow):
         QMessageBox.information(self, "Report Generated", 
                                f"Total transactions: {len(transactions)}\n"
                                f"Total sales: ${total_sales:.2f}")
+    
+    def apply_styles(self):
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f5f5;
+            }
+            #sidebar {
+                background-color: #2196F3;
+            }
+            #sidebar QPushButton {
+                background-color: transparent;
+                color: white;
+                border: none;
+                text-align: left;
+                padding: 15px 20px;
+                font-size: 12pt;
+            }
+            #sidebar QPushButton:hover {
+                background-color: rgba(255, 255, 255, Decimal('0.1'));
+            }
+            #sidebar QPushButton:pressed {
+                background-color: rgba(255, 255, 255, Decimal('0.2'));
+            }
+            QTableWidget {
+                background-color: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 5px;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            QHeaderView::section {
+                background-color: #2196F3;
+                color: white;
+                padding: 10px;
+                border: none;
+                font-weight: bold;
+            }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
     
     def logout(self):
         reply = QMessageBox.question(self, "Logout", 
@@ -1065,8 +1234,8 @@ class StaffEditDialog(QDialog):
             # Update basic info
             cursor.execute("""
                 UPDATE users 
-                SET full_name=?, email=?, role=?
-                WHERE user_id=?
+                SET full_name=%s, email=%s, role=%s
+                WHERE user_id=%s
             """, (name, email, role, self.staff_member[0]))
             
             # Update password if provided
@@ -1074,8 +1243,8 @@ class StaffEditDialog(QDialog):
                 hashed_password = self.db.hash_password(new_password)
                 cursor.execute("""
                     UPDATE users 
-                    SET password=?
-                    WHERE user_id=?
+                    SET password=%s
+                    WHERE user_id=%s
                 """, (hashed_password, self.staff_member[0]))
             
             conn.commit()
@@ -1085,15 +1254,3 @@ class StaffEditDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Update failed: {str(e)}")
-
-    def resizeEvent(self, event):
-        """Handle window resize"""
-        super().resizeEvent(event)
-        # Resize all tables
-        for attr in dir(self):
-            try:
-                widget = getattr(self, attr)
-                if isinstance(widget, QTableWidget):
-                    widget.resizeColumnsToContents()
-            except:
-                pass
