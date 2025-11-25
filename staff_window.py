@@ -549,58 +549,42 @@ class CheckoutDialog(QDialog):
         self.transaction_model = Transaction(db)
         
         self.setWindowTitle("Checkout")
-        self.setMinimumSize(600, 600)
+        self.setMinimumSize(600, 500)
         self.setup_ui()
         self.calculate_totals()
         self.payment_method_changed("Cash")
     
     def setup_ui(self):
-        # Main layout with tighter margins
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
         
-        # Title (stays at top, outside scroll)
+        # Title
         title = QLabel("💳 Checkout")
         title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
         title.setStyleSheet("color: #2196F3;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
-        # ===== SCROLL AREA FOR CONTENT =====
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
-        # Content widget (everything that scrolls)
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
-        content_layout.setSpacing(20)
-        content_layout.setContentsMargins(5, 5, 5, 5)
-        
         # Order summary
         summary_group = QGroupBox("Order Summary")
         summary_layout = QVBoxLayout()
-        summary_layout.setSpacing(8)
         
         for item in self.cart_items:
             item_label = QLabel(f"{item['name']} x{item['quantity']} = ${item['price'] * item['quantity']:.2f}")
             summary_layout.addWidget(item_label)
         
         summary_group.setLayout(summary_layout)
-        content_layout.addWidget(summary_group)
+        layout.addWidget(summary_group)
         
         # Totals
         self.totals_label = QLabel()
-        self.totals_label.setFont(QFont("Arial", 11))
-        content_layout.addWidget(self.totals_label)
+        self.totals_label.setFont(QFont("Arial", 12))
+        layout.addWidget(self.totals_label)
         
-        # Payment method group
+        # Payment method
         payment_group = QGroupBox("Payment Method")
         payment_layout = QVBoxLayout()
-        payment_layout.setSpacing(15)
         
         self.payment_combo = QComboBox()
         self.payment_combo.addItems(["Cash", "Credit Card", "Debit Card", "Digital Wallet"])
@@ -610,9 +594,6 @@ class CheckoutDialog(QDialog):
         # Cash payment fields
         self.cash_widget = QWidget()
         cash_layout = QFormLayout(self.cash_widget)
-        cash_layout.setSpacing(12)
-        cash_layout.setContentsMargins(10, 10, 10, 10)
-        
         self.cash_received = QDoubleSpinBox()
         self.cash_received.setMaximum(999999.99)
         self.cash_received.setPrefix("$")
@@ -620,121 +601,26 @@ class CheckoutDialog(QDialog):
         cash_layout.addRow("Cash Received:", self.cash_received)
         
         self.change_label = QLabel("Change: $0.00")
-        self.change_label.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        self.change_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.change_label.setStyleSheet("color: #4CAF50;")
         cash_layout.addRow("", self.change_label)
-        
         payment_layout.addWidget(self.cash_widget)
         
-        # Card payment fields
-        self.card_widget = QWidget()
-        card_layout = QFormLayout(self.card_widget)
-        card_layout.setSpacing(15)
-        card_layout.setContentsMargins(15, 15, 15, 15)
-        card_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        
-        # Card number
-        self.card_number = QLineEdit()
-        self.card_number.setPlaceholderText("1234 5678 9012 3456")
-        self.card_number.setMaxLength(19)
-        card_layout.addRow("Card Number:", self.card_number)
-        
-        # Cardholder name
-        self.card_name = QLineEdit()
-        self.card_name.setPlaceholderText("John Doe")
-        card_layout.addRow("Cardholder Name:", self.card_name)
-        
-        # Expiry and CVV in a horizontal layout
-        expiry_cvv_widget = QWidget()
-        expiry_cvv_layout = QHBoxLayout(expiry_cvv_widget)
-        expiry_cvv_layout.setContentsMargins(0, 0, 0, 0)
-        expiry_cvv_layout.setSpacing(15)
-        
-        expiry_container = QWidget()
-        expiry_container_layout = QHBoxLayout(expiry_container)
-        expiry_container_layout.setContentsMargins(0, 0, 0, 0)
-        expiry_container_layout.setSpacing(5)
-        
-        self.card_expiry = QLineEdit()
-        self.card_expiry.setPlaceholderText("MM/YY")
-        self.card_expiry.setMaxLength(5)
-        self.card_expiry.setFixedWidth(90)
-        
-        expiry_container_layout.addWidget(QLabel("Expiry:"))
-        expiry_container_layout.addWidget(self.card_expiry)
-        
-        cvv_container = QWidget()
-        cvv_container_layout = QHBoxLayout(cvv_container)
-        cvv_container_layout.setContentsMargins(0, 0, 0, 0)
-        cvv_container_layout.setSpacing(5)
-        
-        self.card_cvv = QLineEdit()
-        self.card_cvv.setPlaceholderText("123")
-        self.card_cvv.setMaxLength(4)
-        self.card_cvv.setFixedWidth(70)
-        self.card_cvv.setEchoMode(QLineEdit.EchoMode.Password)
-        
-        cvv_container_layout.addWidget(QLabel("CVV:"))
-        cvv_container_layout.addWidget(self.card_cvv)
-        
-        expiry_cvv_layout.addWidget(expiry_container)
-        expiry_cvv_layout.addWidget(cvv_container)
-        expiry_cvv_layout.addStretch()
-        
-        card_layout.addRow("", expiry_cvv_widget)
-        
-        # Style the card widget
-        self.card_widget.setStyleSheet("""
-            QWidget {
-                background-color: #f8f9fa;
-                border: 2px solid #2196F3;
-                border-radius: 8px;
-            }
-            QLabel {
-                background: transparent;
-                font-weight: bold;
-                color: #333;
-                font-size: 10pt;
-            }
-            QLineEdit {
-                background-color: white;
-                border: 2px solid #2196F3;
-                border-radius: 4px;
-                padding: 10px;
-                font-size: 10pt;
-            }
-            QLineEdit:focus {
-                border: 2px solid: #1976D2;
-                background-color: #E3F2FD;
-            }
-        """)
-        
-        self.card_widget.setMinimumHeight(180)
-        payment_layout.addWidget(self.card_widget)
-        
-        # Initially hide card widget
-        self.card_widget.setVisible(False)
-        
         payment_group.setLayout(payment_layout)
-        content_layout.addWidget(payment_group)
+        layout.addWidget(payment_group)
         
-        # Add content to scroll area
-        scroll_area.setWidget(content_widget)
-        layout.addWidget(scroll_area, 1)  # Give it stretch factor
-        
-        # ===== BUTTONS (stay at bottom, outside scroll) =====
+        # Buttons
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(15)
         
         self.complete_btn = QPushButton("✓ Complete Transaction")
-        self.complete_btn.setMinimumHeight(45)
-        self.complete_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        self.complete_btn.setMinimumHeight(50)
+        self.complete_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.complete_btn.clicked.connect(self.complete_transaction)
         button_layout.addWidget(self.complete_btn)
         
         cancel_btn = QPushButton("✗ Cancel")
-        cancel_btn.setMinimumHeight(45)
-        cancel_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        cancel_btn.setMinimumHeight(50)
+        cancel_btn.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
@@ -758,20 +644,14 @@ class CheckoutDialog(QDialog):
         <b>Discount:</b> ${self.discount:.2f}<br>
         <b>Tax (10%):</b> ${self.tax:.2f}<br>
         <hr>
-        <b style='font-size: 14pt; color: #4CAF50;'>TOTAL: ${self.total:.2f}</b>
+        <b style='font-size: 16pt; color: #4CAF50;'>TOTAL: ${self.total:.2f}</b>
         """
         self.totals_label.setText(totals_text)
     
     def payment_method_changed(self, method):
-        # Show/hide appropriate payment fields
         self.cash_widget.setVisible(method == "Cash")
-        self.card_widget.setVisible(method in ["Credit Card", "Debit Card"])
-        
         if method == "Cash":
             self.cash_received.setValue(self.total)
-            self.complete_btn.setEnabled(True)
-        else:
-            self.complete_btn.setEnabled(True)
     
     def calculate_change(self):
         received = self.cash_received.value()
@@ -788,38 +668,10 @@ class CheckoutDialog(QDialog):
     def complete_transaction(self):
         payment_method = self.payment_combo.currentText()
         
-        # Validate cash payment
         if payment_method == "Cash":
             if self.cash_received.value() < self.total:
                 QMessageBox.warning(self, "Insufficient Payment", 
                                    "Cash received is less than total amount!")
-                return
-        
-        # Validate card payment
-        if payment_method in ["Credit Card", "Debit Card"]:
-            card_num = self.card_number.text().strip().replace(" ", "")
-            card_name = self.card_name.text().strip()
-            expiry = self.card_expiry.text().strip()
-            cvv = self.card_cvv.text().strip()
-            
-            if not card_num or len(card_num) < 13:
-                QMessageBox.warning(self, "Invalid Card", 
-                                   "Please enter a valid card number (13-19 digits)!")
-                return
-            
-            if not card_name:
-                QMessageBox.warning(self, "Invalid Card", 
-                                   "Please enter the cardholder name!")
-                return
-            
-            if not expiry or len(expiry) != 5 or "/" not in expiry:
-                QMessageBox.warning(self, "Invalid Expiry", 
-                                   "Please enter expiry date as MM/YY!")
-                return
-            
-            if not cvv or len(cvv) < 3:
-                QMessageBox.warning(self, "Invalid CVV", 
-                                   "Please enter a valid CVV (3-4 digits)!")
                 return
         
         try:
@@ -847,7 +699,7 @@ class CheckoutDialog(QDialog):
         
         receipt_dialog = QDialog(self)
         receipt_dialog.setWindowTitle("Receipt")
-        receipt_dialog.setMinimumSize(500, 600)
+        receipt_dialog.setMinimumSize(500, 700)
         
         layout = QVBoxLayout(receipt_dialog)
         
