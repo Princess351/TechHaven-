@@ -140,7 +140,7 @@ class LoginWindow(QMainWindow):
         main_layout.addStretch()
 
         # Footer
-        footer_label = QLabel("Default Admin: admin / admin123")
+        footer_label = QLabel("Powered by TechKnights Solutions © 2025")
         footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer_label.setStyleSheet("color: #999; font-size: 10px;")
         main_layout.addWidget(footer_label)
