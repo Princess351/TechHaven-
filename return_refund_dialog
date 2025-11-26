@@ -2,7 +2,8 @@ from decimal import Decimal
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
     QGroupBox, QTextEdit, QFormLayout, QComboBox, QTableWidget, 
-    QTableWidgetItem, QWidget, QHBoxLayout, QSpinBox, QCheckBox, QMessageBox
+    QTableWidgetItem, QWidget, QHBoxLayout, QSpinBox, QCheckBox, QMessageBox,
+    QScrollArea
 )
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
@@ -29,16 +30,28 @@ class ReturnRefundDialog(QDialog):
     # UI SETUP
     # ---------------------------------------------------
     def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(30, 30, 30, 30)
 
         # Title ---------------------------------------------------
         title = QLabel("🔄 Process Return/Refund")
         title.setFont(QFont("Arial", 20, QFont.Weight.Bold))
         title.setStyleSheet("color: #2196F3;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        main_layout.addWidget(title)
+
+        # Create scroll area for all content
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Container widget for scroll area
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        layout.setSpacing(20)
+        layout.setContentsMargins(0, 0, 10, 0)  # Small right margin for scrollbar
 
         # Lookup group --------------------------------------------
         lookup_group = QGroupBox("Original Transaction")
@@ -81,6 +94,7 @@ class ReturnRefundDialog(QDialog):
             "Unit Price", "Qty to Return", "Subtotal"
         ])
         self.items_table.horizontalHeader().setStretchLastSection(True)
+        self.items_table.setMinimumHeight(200)  # Ensure table has minimum height
         items_layout.addWidget(self.items_table)
 
         self.items_group.setLayout(items_layout)
@@ -120,6 +134,13 @@ class ReturnRefundDialog(QDialog):
         self.refund_group.setLayout(refund_layout)
         layout.addWidget(self.refund_group)
 
+        # Add stretch to push content to top
+        layout.addStretch()
+
+        # Set the scroll content
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
+
         # Buttons ---------------------------------------------------
         button_layout = QHBoxLayout()
 
@@ -137,7 +158,7 @@ class ReturnRefundDialog(QDialog):
         button_layout.addWidget(self.process_btn)
         button_layout.addWidget(cancel_btn)
 
-        layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
 
     # ---------------------------------------------------
     # UI Styling
@@ -155,6 +176,27 @@ class ReturnRefundDialog(QDialog):
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px;
+            }
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: #f0f0f0;
+                width: 12px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: #2196F3;
+                min-height: 20px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #1976D2;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
             }
         """)
 
