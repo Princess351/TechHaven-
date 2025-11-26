@@ -57,16 +57,26 @@ class Customer:
     def get_customer_history(self, customer_id):
         conn = self.db.get_connection()
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT t.*, u.full_name as staff_name 
+
+        cursor.execute("""
+            SELECT 
+                t.transaction_id,
+                t.transaction_date,
+                t.total_amount,
+                t.payment_method,
+                u.full_name AS staff_name
             FROM transactions t
             LEFT JOIN users u ON t.staff_id = u.user_id
-            WHERE t.customer_id=%s
+            WHERE t.customer_id = %s
             ORDER BY t.transaction_date DESC
-        ''', (customer_id,))
-        history = cursor.fetchall()
+        """, (customer_id,))
+
+        result = cursor.fetchall()
+        cursor.close()
         conn.close()
-        return history
+
+        return result
+
     
     def update_loyalty_points(self, customer_id, points_to_add):
         """Add loyalty points and auto-upgrade customer type"""
@@ -640,3 +650,4 @@ class StaffManagement:
         cursor.execute('DELETE FROM users WHERE user_id=%s', (user_id,))
         conn.commit()
         conn.close()
+
