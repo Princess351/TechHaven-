@@ -75,13 +75,14 @@ class Database:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS customers (
                 customer_id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
+                user_id INT NULL,
                 full_name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) NOT NULL,
                 contact VARCHAR(50),
                 address TEXT,
                 customer_type VARCHAR(50) DEFAULT 'regular',
                 loyalty_points INT DEFAULT 0,
+                pending_discount DECIMAL(10,2) DEFAULT 0.00,
                 CONSTRAINT fk_customers_user
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                     ON DELETE CASCADE
@@ -216,6 +217,18 @@ class Database:
             )
 
         conn.commit()
+        
+        # Run migrations to add new columns if they don't exist
+        try:
+            cursor.execute("""
+                ALTER TABLE customers 
+                ADD COLUMN pending_discount DECIMAL(10,2) DEFAULT 0.00
+            """)
+            conn.commit()
+        except mysql.connector.Error:
+            # Column already exists, ignore error
+            pass
+        
         cursor.close()
         conn.close()
 
@@ -306,3 +319,4 @@ class Database:
 
         cursor.close()
         conn.close()
+
