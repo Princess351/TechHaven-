@@ -744,19 +744,36 @@ class CheckoutDialog(QDialog):
     def calculate_totals(self):
         self.subtotal = sum(item['price'] * item['quantity'] for item in self.cart_items)
         
+        # Calculate customer type discount (VIP/Student)
         self.discount = 0
         if self.customer:
-            if self.customer[5] == 'vip':
+            if self.customer[6] == 'vip':  # customer[6] = customer_type
                 self.discount = self.subtotal * Decimal('0.15')
-            elif self.customer[5] == 'student':
+            elif self.customer[6] == 'student':  # customer[6] = customer_type
                 self.discount = self.subtotal * Decimal('0.10')
         
-        self.tax = (self.subtotal - self.discount) * Decimal('0.10')
-        self.total = self.subtotal - self.discount + self.tax
+        # Add pending loyalty points discount
+        self.pending_discount = Decimal('0.00')
+        if self.customer:
+            # customer[8] = pending_discount (0-7 are customer_id, user_id, full_name, email, contact, address, customer_type, loyalty_points)
+            self.pending_discount = Decimal(str(self.customer[8])) if len(self.customer) > 8 and self.customer[8] else Decimal('0.00')
+        
+        # Total discount is customer type discount + pending points discount
+        total_discount = self.discount + self.pending_discount
+        
+        self.tax = (self.subtotal - total_discount) * Decimal('0.10')
+        self.total = self.subtotal - total_discount + self.tax
         
         totals_text = f"""
         <b>Subtotal:</b> ${self.subtotal:.2f}<br>
-        <b>Discount:</b> ${self.discount:.2f}<br>
+        <b>Customer Discount:</b> ${self.discount:.2f}<br>
+        """
+        
+        if self.pending_discount > 0:
+            totals_text += f"<b style='color: #FF9800;'>Loyalty Points Discount:</b> ${self.pending_discount:.2f}<br>"
+        
+        totals_text += f"""
+        <b>Total Discount:</b> ${total_discount:.2f}<br>
         <b>Tax (10%):</b> ${self.tax:.2f}<br>
         <hr>
         <b style='font-size: 14pt; color: #4CAF50;'>TOTAL: ${self.total:.2f}</b>
@@ -832,6 +849,19 @@ class CheckoutDialog(QDialog):
                 customer_id, self.staff['user_id'], self.cart_items, 
                 payment_method, discount_rate
             )
+            
+            # Clear pending discount after successful purchase
+            if self.customer and self.pending_discount > 0:
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE customers 
+                    SET pending_discount = 0.00
+                    WHERE customer_id = %s
+                """, (self.customer[0],))
+                conn.commit()
+                cursor.close()
+                conn.close()
             
             # Generate and show receipt
             self.show_receipt(transaction_id)
