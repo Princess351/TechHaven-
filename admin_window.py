@@ -376,7 +376,7 @@ class AdminWindow(QMainWindow):
         self.customers_table.setColumnWidth(3, 120)  # Phone
         self.customers_table.setColumnWidth(4, 100)  # Type
         self.customers_table.setColumnWidth(5, 120)  # Loyalty Points
-        self.customers_table.setColumnWidth(6, 220)  # Actions (big enough for 2 buttons)
+        self.customers_table.setColumnWidth(6, 320)  # Actions (3 buttons: Edit, History, Delete)
 
         # make rows tall enough so buttons look nice
         self.customers_table.verticalHeader().setDefaultSectionSize(80)
@@ -391,8 +391,8 @@ class AdminWindow(QMainWindow):
         customers = self.customer_model.get_all_customers()
         self.customers_table.setRowCount(len(customers))
         
-        # Set column width for Actions column
-        self.customers_table.setColumnWidth(6, 250)
+        # Set column width for Actions column (3 buttons: Edit, History, Delete)
+        self.customers_table.setColumnWidth(6, 320)
         
         # Set row height to accommodate larger buttons
         for i in range(len(customers)):
@@ -463,6 +463,30 @@ class AdminWindow(QMainWindow):
             history_btn.clicked.connect(lambda checked, cid=customer[0]: self.view_customer_history(cid))
             action_layout.addWidget(history_btn)
             
+            # Delete Button - Red
+            delete_btn = QPushButton("Delete")
+            delete_btn.setFixedSize(90, 38)
+            delete_btn.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            delete_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #F44336;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 10pt;
+                }
+                QPushButton:hover {
+                    background-color: #D32F2F;
+                }
+                QPushButton:pressed {
+                    background-color: #B71C1C;
+                }
+            """)
+            delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            delete_btn.clicked.connect(lambda checked, c=customer: self.delete_customer(c))
+            action_layout.addWidget(delete_btn)
+            
             self.customers_table.setCellWidget(row, 6, action_widget)
     
     def add_customer(self):
@@ -502,18 +526,18 @@ class AdminWindow(QMainWindow):
 
         # Fill rows safely
         for row, trans in enumerate(history):
-            transaction_id = trans[0]
-            date = str(trans[8]) if len(trans) > 8 else ""
-            total = trans[3] if len(trans) > 3 else 0
+            transaction_id = str(trans[0])
+            date = trans[1].strftime("%Y-%m-%d %H:%M:%S") if trans[1] else ""
+            total = f"${trans[2]:.2f}"
+            payment_method = trans[3] if trans[3] else "N/A"
+            staff_name = trans[4] if trans[4] else "SELF-Checkout"
 
-            payment_method = trans[6] if len(trans) > 6 else "N/A"
-            staff_name = trans[10] if len(trans) > 10 and trans[10] else "SELF-Checkout"
-
-            table.setItem(row, 0, QTableWidgetItem(str(transaction_id)))
+            table.setItem(row, 0, QTableWidgetItem(transaction_id))
             table.setItem(row, 1, QTableWidgetItem(date))
-            table.setItem(row, 2, QTableWidgetItem(f"${total:.2f}"))
+            table.setItem(row, 2, QTableWidgetItem(total))
             table.setItem(row, 3, QTableWidgetItem(payment_method))
             table.setItem(row, 4, QTableWidgetItem(staff_name))
+
 
         layout.addWidget(table)
 
@@ -522,6 +546,72 @@ class AdminWindow(QMainWindow):
         layout.addWidget(close_btn)
 
         dialog.exec()
+
+    def delete_customer(self, customer):
+        """Delete a customer after confirmation"""
+        customer_id = customer[0]
+        customer_name = customer[2]
+        
+        # Show confirmation dialog
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete customer '{customer_name}'?\n\n"
+            f"This will:\n"
+            f"• Delete customer account\n"
+            f"• Preserve transaction history (customer will show as 'Deleted Customer')\n"
+            f"• Remove loyalty points and cart items\n\n"
+            f"This action cannot be undone!",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # Delete customer from database
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                
+                # Get the user_id associated with this customer (if any)
+                cursor.execute("SELECT user_id FROM customers WHERE customer_id = %s", (customer_id,))
+                result = cursor.fetchone()
+                
+                if result:
+                    user_id = result[0]
+                    
+                    # Delete customer record (ON DELETE CASCADE will handle cart items)
+                    # ON DELETE SET NULL will handle transactions automatically
+                    cursor.execute("DELETE FROM customers WHERE customer_id = %s", (customer_id,))
+                    
+                    # Delete user account only if user_id exists (not NULL)
+                    if user_id is not None:
+                        cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    QMessageBox.information(
+                        self,
+                        "Success",
+                        f"Customer '{customer_name}' has been deleted successfully!\n\n"
+                        f"Transaction history has been preserved."
+                    )
+                    
+                    # Refresh the customer list
+                    self.refresh_customers()
+                else:
+                    conn.close()
+                    QMessageBox.warning(self, "Error", "Customer not found!")
+                    
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to delete customer: {str(e)}"
+                )
+
+
+
 
     
     def create_staff_page(self):
@@ -1013,6 +1103,17 @@ class CustomerDialog(QDialog):
         
         self.email_input = QLineEdit()
         form.addRow("Email:", self.email_input)
+
+        # NEW USERNAME FIELD
+        self.username_input = QLineEdit()
+        form.addRow("Username:", self.username_input)
+
+
+        # 🔑 NEW PASSWORD FIELD
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("Password:", self.password_input)
+
         
         self.phone_input = QLineEdit()
         form.addRow("Phone:", self.phone_input)
@@ -1048,24 +1149,49 @@ class CustomerDialog(QDialog):
             self.type_input.setCurrentText(self.customer[6])
     
     def save(self):
+    
         name = self.name_input.text().strip()
         email = self.email_input.text().strip()
         phone = self.phone_input.text().strip()
         address = self.address_input.toPlainText().strip()
         ctype = self.type_input.currentText()
-        
-        if not name or not email:
-            QMessageBox.warning(self, "Error", "Name and email are required!")
-            return
-        
-        if self.customer:
+
+        username = self.username_input.text().strip()
+        password = self.password_input.text().strip()
+
+        # For new customer
+        if not self.customer:
+            if not username:
+                QMessageBox.warning(self, "Error", "Username is required!")
+                return
+
+            if len(password) < 6:
+                QMessageBox.warning(self, "Error", "Password must be at least 6 characters!")
+                return
+
+            # Register user + customer
+            success, message = self.db.register_customer(
+                username,   # login username
+                password,   # login password
+                name,       # full name
+                email,      # email
+                phone,      # contact
+                address     # address
+            )
+
+            if success:
+                QMessageBox.information(self, "Success", "Customer account created successfully!")
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Error", message)
+                return
+
+        # For editing existing customer (no password or username change)
+        else:
             self.customer_model.update_customer(self.customer[0], name, email, phone, address, ctype)
             QMessageBox.information(self, "Success", "Customer updated successfully!")
-        else:
-            self.customer_model.add_customer(name, email, phone, address, ctype)
-            QMessageBox.information(self, "Success", "Customer added successfully!")
-        
-        self.accept()
+            self.accept()
+
 
 class StaffDialog(QDialog):
     def __init__(self, db, parent):
@@ -1115,24 +1241,38 @@ class StaffDialog(QDialog):
     def save(self):
         username = self.username_input.text().strip()
         password = self.password_input.text().strip()
-        name = self.name_input.text().strip()
-        email = self.email_input.text().strip()
-        role = self.role_input.currentText()
-        
-        if not all([username, password, name, email]):
-            QMessageBox.warning(self, "Error", "All fields are required!")
-            return
-        
-        if len(password) < 6:
-            QMessageBox.warning(self, "Error", "Password must be at least 6 characters!")
-            return
-        
-        success, message = self.staff_model.add_staff(username, password, name, email, role)
-        if success:
-            QMessageBox.information(self, "Success", message)
-            self.accept()
+
+        if not self.customer:   # creating new customer
+            if not username:
+                QMessageBox.warning(self, "Error", "Username is required!")
+                return
+
+            if len(password) < 6:
+                QMessageBox.warning(self, "Error", "Password must be at least 6 characters!")
+                return
+
+            # Create user + customer using DB helper
+            success, message = self.db.register_customer(
+                username,     # username for login
+                password,     # password
+                name,         # full name
+                email,        # email
+                phone,        # contact
+                address       # address
+            )
+
+            if success:
+                QMessageBox.information(self, "Success", "Customer account created successfully!")
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Error", message)
+
         else:
-            QMessageBox.critical(self, "Error", message)
+            # Editing existing customer
+            self.customer_model.update_customer(self.customer[0], name, email, phone, address, ctype)
+            QMessageBox.information(self, "Success", "Customer updated successfully!")
+            self.accept()
+
 
 class StaffEditDialog(QDialog):
     def __init__(self, db, parent, staff_member):
