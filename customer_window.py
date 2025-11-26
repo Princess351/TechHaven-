@@ -881,16 +881,22 @@ class CustomerCheckoutDialog(QDialog):
         self.loyalty_discount = Decimal('0.00')
         self.points_redeemed = 0
 
-        # Fetch current loyalty points (MySQL-style query)
+        # Fetch current loyalty points and pending discount (MySQL-style query)
         conn = db.get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT loyalty_points FROM customers WHERE customer_id = %s",
+            "SELECT loyalty_points, pending_discount FROM customers WHERE customer_id = %s",
             (customer[0],)
         )
         result = cursor.fetchone()
         conn.close()
-        self.available_points = result[0] if result else 0
+        
+        if result:
+            self.available_points = result[0] if result[0] else 0
+            # Load any pending discount from previous redemptions
+            self.loyalty_discount = Decimal(str(result[1])) if result[1] else Decimal('0.00')
+        else:
+            self.available_points = 0
 
         self.setWindowTitle("Checkout")
         self.setMinimumSize(650, 600)  # Reduced from 800 - no spacer needed
@@ -1152,7 +1158,7 @@ class CustomerCheckoutDialog(QDialog):
         """
         
         if self.loyalty_discount > 0:
-            totals_text += f"<b>Points Discount:</b> ${self.loyalty_discount:.2f}<br>"
+            totals_text += f"<b style='color: #FF9800;'>🎁 Loyalty Points Discount:</b> <span style='color: #FF9800;'>${self.loyalty_discount:.2f}</span><br>"
         
         totals_text += f"""
         <b>Tax (10%):</b> ${self.tax:.2f}<br>
@@ -1221,6 +1227,19 @@ class CustomerCheckoutDialog(QDialog):
                 payment_method,             # payment method
                 discount_rate               # KEEP AS DECIMAL ✔
             )
+            
+            # Clear pending discount after successful purchase
+            if self.loyalty_discount > 0:
+                conn = self.db.get_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE customers 
+                    SET pending_discount = 0.00
+                    WHERE customer_id = %s
+                """, (self.customer[0],))
+                conn.commit()
+                cursor.close()
+                conn.close()
             
             QMessageBox.information(
                 self,
