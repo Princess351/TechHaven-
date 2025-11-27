@@ -50,15 +50,22 @@ class StaffWindow(QMainWindow):
         # Header
         header_layout = QHBoxLayout()
         title = QLabel("📦 Product Catalog")
-        title.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
         title.setStyleSheet("color: #2196F3;")
         header_layout.addWidget(title)
+        
+        # User info display
+        user_info = QLabel(f"👤 {self.user['full_name']} ({self.user['role'].upper()})")
+        user_info.setFont(QFont("Arial", 10))
+        user_info.setStyleSheet("color: #666; padding: 5px 10px; background-color: #f0f0f0; border-radius: 5px;")
+        header_layout.addWidget(user_info)
+        
         header_layout.addStretch()
         
         # Search
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Search products...")
-        self.search_input.setMinimumWidth(200)
+        self.search_input.setPlaceholderText("🔍 Search products")
+        self.search_input.setMinimumWidth(150)
         self.search_input.textChanged.connect(self.filter_products)
         header_layout.addWidget(self.search_input)
         
@@ -956,4 +963,3 @@ class CheckoutDialog(QDialog):
             document = QTextEdit()
             document.setPlainText(content)
             document.print_(printer)
-
