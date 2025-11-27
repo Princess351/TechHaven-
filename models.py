@@ -108,6 +108,30 @@ class Customer:
             conn.close()
             return False, "Insufficient loyalty points"
         
+        # Calculate discount (100 points = $10 discount)
+        discount = points_to_redeem / 10
+        
+        # Deduct points AND save pending discount
+        cursor.execute("""
+            UPDATE customers 
+            SET loyalty_points = loyalty_points - %s,
+                pending_discount = pending_discount + %s
+            WHERE customer_id = %s
+        """, (points_to_redeem, discount, customer_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return True, discount
+        
+        # Check current points
+        cursor.execute("SELECT loyalty_points FROM customers WHERE customer_id=%s", (customer_id,))
+        result = cursor.fetchone()
+        
+        if not result or result[0] < points_to_redeem:
+            conn.close()
+            return False, "Insufficient loyalty points"
+        
         # Deduct points
         cursor.execute("""
             UPDATE customers 
