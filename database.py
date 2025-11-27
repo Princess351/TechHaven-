@@ -8,7 +8,7 @@ class Database:
     def __init__(self,
                  host="localhost",
                  user="root",
-                 password="12345",
+                 password="12345",  # Try empty password first
                  database="testtechhaven"):
         # Save DB name separately
         self.db_name = database
@@ -257,7 +257,7 @@ class Database:
             }
         return None
 
-    def register_customer(self, username, password, full_name, email, contact, address):
+    def register_customer(self, username, password, full_name, email, contact, address, customer_type="regular"):
         """Register a new customer (user + customer record)"""
         try:
             conn = self.get_connection()
@@ -276,7 +276,7 @@ class Database:
             cursor.execute(
                 "INSERT INTO customers (user_id, full_name, email, contact, address, customer_type) "
                 "VALUES (%s, %s, %s, %s, %s, %s)",
-                (user_id, full_name, email, contact, address, "regular")
+                (user_id, full_name, email, contact, address, customer_type)
             )
 
             conn.commit()
@@ -319,4 +319,3 @@ class Database:
 
         cursor.close()
         conn.close()
-
