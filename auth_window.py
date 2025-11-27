@@ -232,7 +232,7 @@ class LoginWindow(QMainWindow):
                 from admin_window import AdminWindow
                 self.admin_window = AdminWindow(self.db, user)
                 self.admin_window.show()
-            elif user['role'] in ('staff', 'cashier'):
+            elif user['role'] == 'staff':
                 from staff_window import StaffWindow
                 self.staff_window = StaffWindow(self.db, user)
                 self.staff_window.show()
