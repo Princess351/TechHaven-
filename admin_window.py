@@ -1176,7 +1176,8 @@ class CustomerDialog(QDialog):
                 name,       # full name
                 email,      # email
                 phone,      # contact
-                address     # address
+                address,    # address
+                ctype       # customer type (regular/vip/student)
             )
 
             if success:
@@ -1221,7 +1222,7 @@ class StaffDialog(QDialog):
         form.addRow("Email:", self.email_input)
         
         self.role_input = QComboBox()
-        self.role_input.addItems(["staff", "cashier", "admin"])
+        self.role_input.addItems(["staff", "admin"])
         form.addRow("Role:", self.role_input)
         
         layout.addLayout(form)
@@ -1241,37 +1242,36 @@ class StaffDialog(QDialog):
     def save(self):
         username = self.username_input.text().strip()
         password = self.password_input.text().strip()
+        name = self.name_input.text().strip()
+        email = self.email_input.text().strip()
+        role = self.role_input.currentText()
 
-        if not self.customer:   # creating new customer
-            if not username:
-                QMessageBox.warning(self, "Error", "Username is required!")
-                return
+        if not username:
+            QMessageBox.warning(self, "Error", "Username is required!")
+            return
 
-            if len(password) < 6:
-                QMessageBox.warning(self, "Error", "Password must be at least 6 characters!")
-                return
+        if len(password) < 6:
+            QMessageBox.warning(self, "Error", "Password must be at least 6 characters!")
+            return
+        
+        if not name or not email:
+            QMessageBox.warning(self, "Error", "Full name and email are required!")
+            return
 
-            # Create user + customer using DB helper
-            success, message = self.db.register_customer(
-                username,     # username for login
-                password,     # password
-                name,         # full name
-                email,        # email
-                phone,        # contact
-                address       # address
-            )
+        # Add staff member using the correct method
+        success, message = self.staff_model.add_staff(
+            username,
+            password,
+            name,
+            email,
+            role
+        )
 
-            if success:
-                QMessageBox.information(self, "Success", "Customer account created successfully!")
-                self.accept()
-            else:
-                QMessageBox.critical(self, "Error", message)
-
-        else:
-            # Editing existing customer
-            self.customer_model.update_customer(self.customer[0], name, email, phone, address, ctype)
-            QMessageBox.information(self, "Success", "Customer updated successfully!")
+        if success:
+            QMessageBox.information(self, "Success", "Staff member added successfully!")
             self.accept()
+        else:
+            QMessageBox.critical(self, "Error", message)
 
 
 class StaffEditDialog(QDialog):
@@ -1303,7 +1303,7 @@ class StaffEditDialog(QDialog):
         form.addRow("Email:", self.email_input)
         
         self.role_input = QComboBox()
-        self.role_input.addItems(["staff", "cashier", "admin"])
+        self.role_input.addItems(["staff", "admin"])
         self.role_input.setCurrentText(self.staff_member[4])
         form.addRow("Role:", self.role_input)
         
