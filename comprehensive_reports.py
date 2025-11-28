@@ -439,24 +439,26 @@ class ComprehensiveReportsDialog(QDialog):
             QMessageBox.critical(self, "Error", f"Export failed: {str(e)}")
     
     def print_current_report(self):
-        """Print current report"""
         current_tab = self.tabs.currentIndex()
         
         printer = QPrinter()
         dialog = QPrintDialog(printer, self)
         
         if dialog.exec():
-            # Create printable document
-            document = QTextEdit()
-            
+            from PyQt6.QtGui import QTextDocument
+            doc = QTextDocument()
+
+            # Choose report HTML
             if current_tab == 0:
-                document.setHtml(self.generate_daily_sales_html())
+                html = self.generate_daily_sales_html()
             elif current_tab == 1:
-                document.setHtml(self.generate_customer_type_html())
-            elif current_tab == 2:
-                document.setHtml(self.generate_inventory_html())
-            
-            document.print_(printer)
+                html = self.generate_customer_type_html()
+            else:
+                html = self.generate_inventory_html()
+
+            doc.setHtml(html)
+            doc.print(printer)
+
     
     def generate_daily_sales_html(self):
         """Generate HTML for daily sales report"""
@@ -576,4 +578,3 @@ class ComprehensiveReportsDialog(QDialog):
             background-color: #D32F2F;
         }
     """)
-
