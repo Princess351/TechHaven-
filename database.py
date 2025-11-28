@@ -8,7 +8,7 @@ class Database:
     def __init__(self,
                  host="localhost",
                  user="root",
-                 password="12345",  # Try empty password first
+                 password="12345",
                  database="testtechhaven"):
         # Save DB name separately
         self.db_name = database
@@ -34,6 +34,9 @@ class Database:
 
         # 2) Initialize tables + seed data
         self.init_database()
+        
+        # 3) Run migrations for soft delete columns
+        self.run_migrations()
 
     # ----------------------------------------------------------------------
     # AUTO-CREATE DATABASE
@@ -68,7 +71,9 @@ class Database:
                 password VARCHAR(255) NOT NULL,
                 full_name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) NOT NULL,
-                role VARCHAR(50) DEFAULT 'customer'
+                role VARCHAR(50) DEFAULT 'customer',
+                is_active TINYINT(1) DEFAULT 1,
+                deleted_at TIMESTAMP NULL DEFAULT NULL
             ) ENGINE=InnoDB
         """)
 
@@ -83,9 +88,11 @@ class Database:
                 customer_type VARCHAR(50) DEFAULT 'regular',
                 loyalty_points INT DEFAULT 0,
                 pending_discount DECIMAL(10,2) DEFAULT 0.00,
+                is_active TINYINT(1) DEFAULT 1,
+                deleted_at TIMESTAMP NULL DEFAULT NULL,
                 CONSTRAINT fk_customers_user
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
-                    ON DELETE CASCADE
+                    ON DELETE SET NULL
             ) ENGINE=InnoDB
         """)
 
@@ -98,7 +105,9 @@ class Database:
                 stock INT NOT NULL,
                 category VARCHAR(100),
                 low_stock_threshold INT DEFAULT 10,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active TINYINT(1) DEFAULT 1,
+                deleted_at TIMESTAMP NULL DEFAULT NULL
             ) ENGINE=InnoDB
         """)
 
@@ -189,9 +198,9 @@ class Database:
         if cursor.fetchone() is None:
             hashed = self.hash_password("admin123")
             cursor.execute(
-                "INSERT INTO users (username, password, full_name, email, role) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                ("admin", hashed, "System Administrator", "admin@techhaven.com", "admin")
+                "INSERT INTO users (username, password, full_name, email, role, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                ("admin", hashed, "System Administrator", "admin@techhaven.com", "admin", 1)
             )
 
         # --- Seed sample products (if empty) ---
@@ -211,22 +220,61 @@ class Database:
                 ("PlayStation 5", "Gaming Console with Controller", 499.99, 7, "Gaming"),
             ]
             cursor.executemany(
-                "INSERT INTO products (name, description, price, stock, category) "
-                "VALUES (%s, %s, %s, %s, %s)",
+                "INSERT INTO products (name, description, price, stock, category, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, 1)",
                 sample_products
             )
 
         conn.commit()
+        cursor.close()
+        conn.close()
+
+    # ----------------------------------------------------------------------
+    # MIGRATIONS FOR SOFT DELETE COLUMNS
+    # ----------------------------------------------------------------------
+    def run_migrations(self):
+        """Add soft delete columns to existing tables if they don't exist"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
         
-        # Run migrations to add new columns if they don't exist
+        migrations = [
+            # Products table
+            ("products", "is_active", "TINYINT(1) DEFAULT 1"),
+            ("products", "deleted_at", "TIMESTAMP NULL DEFAULT NULL"),
+            
+            # Customers table
+            ("customers", "is_active", "TINYINT(1) DEFAULT 1"),
+            ("customers", "deleted_at", "TIMESTAMP NULL DEFAULT NULL"),
+            
+            # Users table
+            ("users", "is_active", "TINYINT(1) DEFAULT 1"),
+            ("users", "deleted_at", "TIMESTAMP NULL DEFAULT NULL"),
+            
+            # Pending discount column for customers
+            ("customers", "pending_discount", "DECIMAL(10,2) DEFAULT 0.00"),
+        ]
+        
+        for table, column, definition in migrations:
+            try:
+                cursor.execute(f"""
+                    ALTER TABLE {table} 
+                    ADD COLUMN {column} {definition}
+                """)
+                conn.commit()
+                print(f"✓ Added column {column} to {table}")
+            except mysql.connector.Error as e:
+                if e.errno == 1060:  # Duplicate column error
+                    pass  # Column already exists, ignore
+                else:
+                    print(f"Migration warning for {table}.{column}: {e}")
+        
+        # Update existing records to be active if is_active is NULL
         try:
-            cursor.execute("""
-                ALTER TABLE customers 
-                ADD COLUMN pending_discount DECIMAL(10,2) DEFAULT 0.00
-            """)
+            cursor.execute("UPDATE products SET is_active = 1 WHERE is_active IS NULL")
+            cursor.execute("UPDATE customers SET is_active = 1 WHERE is_active IS NULL")
+            cursor.execute("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
             conn.commit()
         except mysql.connector.Error:
-            # Column already exists, ignore error
             pass
         
         cursor.close()
@@ -238,9 +286,10 @@ class Database:
         cursor = conn.cursor()
         hashed_password = self.hash_password(password)
 
+        # Only authenticate ACTIVE users
         cursor.execute(
             "SELECT user_id, username, full_name, email, role "
-            "FROM users WHERE username = %s AND password = %s",
+            "FROM users WHERE username = %s AND password = %s AND is_active = 1",
             (username, hashed_password)
         )
         row = cursor.fetchone()
@@ -266,17 +315,17 @@ class Database:
 
             # Insert into users
             cursor.execute(
-                "INSERT INTO users (username, password, full_name, email, role) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (username, hashed_password, full_name, email, "customer")
+                "INSERT INTO users (username, password, full_name, email, role, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (username, hashed_password, full_name, email, "customer", 1)
             )
             user_id = cursor.lastrowid
 
             # Insert into customers
             cursor.execute(
-                "INSERT INTO customers (user_id, full_name, email, contact, address, customer_type) "
-                "VALUES (%s, %s, %s, %s, %s, %s)",
-                (user_id, full_name, email, contact, address, customer_type)
+                "INSERT INTO customers (user_id, full_name, email, contact, address, customer_type, is_active) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (user_id, full_name, email, contact, address, customer_type, 1)
             )
 
             conn.commit()
@@ -289,33 +338,46 @@ class Database:
             return False, f"Registration failed: {e}"
 
     def auto_upgrade_customer_type(self, customer_id: int):
-        """Automatically upgrade customer type based on loyalty points"""
+        """Automatically upgrade customer type based on loyalty points (never downgrades)"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT loyalty_points FROM customers WHERE customer_id = %s",
+            "SELECT loyalty_points, customer_type FROM customers WHERE customer_id = %s AND is_active = 1",
             (customer_id,)
         )
         result = cursor.fetchone()
 
         if result is not None:
             points = result[0] or 0
+            current_type = result[1]
 
+            # Determine what type they qualify for based on points
             if points >= 1000:
-                new_type = "vip"
+                qualified_type = "vip"
             elif points >= 500:
-                new_type = "premium"
+                qualified_type = "premium"
             else:
-                new_type = "regular"
-
-            cursor.execute(
-                "UPDATE customers SET customer_type = %s "
-                "WHERE customer_id = %s AND customer_type <> %s",
-                (new_type, customer_id, new_type)
-            )
-
-            conn.commit()
+                qualified_type = "regular"
+            
+            # Define priority levels (higher = better)
+            priority = {
+                "regular": 0,
+                "student": 1,
+                "premium": 2,
+                "vip": 3
+            }
+            
+            current_priority = priority.get(current_type, 0)
+            qualified_priority = priority.get(qualified_type, 0)
+            
+            # Only upgrade if qualified type has HIGHER priority than current
+            if qualified_priority > current_priority:
+                cursor.execute(
+                    "UPDATE customers SET customer_type = %s WHERE customer_id = %s",
+                    (qualified_type, customer_id)
+                )
+                conn.commit()
 
         cursor.close()
         conn.close()
