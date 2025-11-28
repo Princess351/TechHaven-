@@ -1,6 +1,4 @@
 from decimal import Decimal
-# Add this to admin_window.py for enhanced reporting
-
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QColor
@@ -578,3 +576,4 @@ class ComprehensiveReportsDialog(QDialog):
             background-color: #D32F2F;
         }
     """)
+
