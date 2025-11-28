@@ -154,6 +154,11 @@ class AdminWindow(QMainWindow):
         layout.addStretch()
         return page
     
+    def refresh_dashboard(self):
+        new_dashboard = self.create_dashboard_page()
+        self.stack.removeWidget(self.stack.widget(0))  # Remove old dashboard
+        self.stack.insertWidget(0, new_dashboard)      # Put updated dashboard
+
     def create_stat_card(self, title, value, subtitle, color):
         card = QFrame()
         card.setObjectName("statCard")
@@ -210,6 +215,12 @@ class AdminWindow(QMainWindow):
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self.refresh_products)
         header_layout.addWidget(refresh_btn)
+
+        view_deleted_btn = QPushButton("🗑️ View Deleted")
+        view_deleted_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        view_deleted_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        view_deleted_btn.clicked.connect(self.view_deleted_products)
+        header_layout.addWidget(view_deleted_btn)
         
         layout.addLayout(header_layout)
         
@@ -312,6 +323,16 @@ class AdminWindow(QMainWindow):
         dialog = ProductDialog(self.db, self)
         if dialog.exec():
             self.refresh_products()
+
+    def view_deleted_products(self):
+        dialog = DeletedRecordsDialog(
+            self.db, 
+            self, 
+            record_type="products",
+            title="Deleted Products"
+        )
+        if dialog.exec():
+            self.refresh_products()
     
     def edit_product(self, product):
         dialog = ProductDialog(self.db, self, product)
@@ -319,13 +340,22 @@ class AdminWindow(QMainWindow):
             self.refresh_products()
     
     def delete_product(self, product_id):
-        reply = QMessageBox.question(self, "Confirm Delete", 
-                                     "Are you sure you want to delete this product?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(
+            self, 
+            "Confirm Deactivation", 
+            "Are you sure you want to deactivate this product?\n\n"
+            "• Product will be hidden from sales\n"
+            "• Transaction history will be preserved\n"
+            "• Product can be restored later",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         if reply == QMessageBox.StandardButton.Yes:
-            self.product_model.delete_product(product_id)
-            self.refresh_products()
-            QMessageBox.information(self, "Success", "Product deleted successfully!")
+            success, message = self.product_model.delete_product(product_id)
+            if success:
+                self.refresh_products()
+                QMessageBox.information(self, "Success", message)
+            else:
+                QMessageBox.critical(self, "Error", message)
     
     def create_customers_page(self):
         page = QWidget()
@@ -352,6 +382,12 @@ class AdminWindow(QMainWindow):
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self.refresh_customers)
         header_layout.addWidget(refresh_btn)
+
+        view_deleted_btn = QPushButton("🗑️ View Deleted")
+        view_deleted_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        view_deleted_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        view_deleted_btn.clicked.connect(self.view_deleted_customers)
+        header_layout.addWidget(view_deleted_btn)
         
         layout.addLayout(header_layout)
         
@@ -494,6 +530,16 @@ class AdminWindow(QMainWindow):
         if dialog.exec():
             self.refresh_customers()
     
+    def view_deleted_customers(self):
+        dialog = DeletedRecordsDialog(
+            self.db, 
+            self, 
+            record_type="customers",
+            title="Deleted Customers"
+        )
+        if dialog.exec():
+            self.refresh_customers()
+    
     def edit_customer(self, customer):
         dialog = CustomerDialog(self.db, self, customer)
         if dialog.exec():
@@ -548,67 +594,27 @@ class AdminWindow(QMainWindow):
         dialog.exec()
 
     def delete_customer(self, customer):
-        """Delete a customer after confirmation"""
         customer_id = customer[0]
         customer_name = customer[2]
         
-        # Show confirmation dialog
         reply = QMessageBox.question(
             self,
-            "Confirm Delete",
-            f"Are you sure you want to delete customer '{customer_name}'?\n\n"
-            f"This will:\n"
-            f"• Delete customer account\n"
-            f"• Preserve transaction history (customer will show as 'Deleted Customer')\n"
-            f"• Remove loyalty points and cart items\n\n"
-            f"This action cannot be undone!",
+            "Confirm Deactivation",
+            f"Are you sure you want to deactivate customer '{customer_name}'?\n\n"
+            f"• Customer will be unable to login\n"
+            f"• Transaction history will be preserved\n"
+            f"• Customer can be restored later",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            try:
-                # Delete customer from database
-                conn = self.db.get_connection()
-                cursor = conn.cursor()
-                
-                # Get the user_id associated with this customer (if any)
-                cursor.execute("SELECT user_id FROM customers WHERE customer_id = %s", (customer_id,))
-                result = cursor.fetchone()
-                
-                if result:
-                    user_id = result[0]
-                    
-                    # Delete customer record (ON DELETE CASCADE will handle cart items)
-                    # ON DELETE SET NULL will handle transactions automatically
-                    cursor.execute("DELETE FROM customers WHERE customer_id = %s", (customer_id,))
-                    
-                    # Delete user account only if user_id exists (not NULL)
-                    if user_id is not None:
-                        cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
-                    
-                    conn.commit()
-                    conn.close()
-                    
-                    QMessageBox.information(
-                        self,
-                        "Success",
-                        f"Customer '{customer_name}' has been deleted successfully!\n\n"
-                        f"Transaction history has been preserved."
-                    )
-                    
-                    # Refresh the customer list
-                    self.refresh_customers()
-                else:
-                    conn.close()
-                    QMessageBox.warning(self, "Error", "Customer not found!")
-                    
-            except Exception as e:
-                QMessageBox.critical(
-                    self,
-                    "Error",
-                    f"Failed to delete customer: {str(e)}"
-                )
+            success, message = self.customer_model.delete_customer(customer_id)
+            if success:
+                self.refresh_customers()
+                QMessageBox.information(self, "Success", message)
+            else:
+                QMessageBox.critical(self, "Error", message)
 
 
 
@@ -639,6 +645,12 @@ class AdminWindow(QMainWindow):
         refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         refresh_btn.clicked.connect(self.refresh_staff)
         header_layout.addWidget(refresh_btn)
+
+        view_deleted_btn = QPushButton("🗑️ View Deleted")
+        view_deleted_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        view_deleted_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        view_deleted_btn.clicked.connect(self.view_deleted_staff)
+        header_layout.addWidget(view_deleted_btn)
         
         layout.addLayout(header_layout)
         
@@ -750,6 +762,16 @@ class AdminWindow(QMainWindow):
         dialog = StaffDialog(self.db, self)
         if dialog.exec():
             self.refresh_staff()
+
+    def view_deleted_staff(self):
+        dialog = DeletedRecordsDialog(
+            self.db, 
+            self, 
+            record_type="staff",
+            title="Deleted Staff Members"
+        )
+        if dialog.exec():
+            self.refresh_staff()
     
     def edit_staff(self, staff_member):
         dialog = StaffEditDialog(self.db, self, staff_member)
@@ -757,18 +779,28 @@ class AdminWindow(QMainWindow):
             self.refresh_staff()
     
     def delete_staff(self, staff_id):
+        """Soft delete a staff member"""
         # Prevent deleting the current admin
         if staff_id == self.user['user_id']:
             QMessageBox.warning(self, "Error", "Cannot delete yourself!")
             return
         
-        reply = QMessageBox.question(self, "Confirm Delete", 
-                                     "Are you sure you want to delete this staff member?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(
+            self, 
+            "Confirm Deactivation", 
+            "Are you sure you want to deactivate this staff member?\n\n"
+            "• Staff will be unable to login\n"
+            "• Transaction history will be preserved\n"
+            "• Staff can be restored later",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         if reply == QMessageBox.StandardButton.Yes:
-            self.staff_model.delete_staff(staff_id)
-            self.refresh_staff()
-            QMessageBox.information(self, "Success", "Staff deleted successfully!")
+            success, message = self.staff_model.delete_staff(staff_id)
+            if success:
+                self.refresh_staff()
+                QMessageBox.information(self, "Success", message)
+            else:
+                QMessageBox.critical(self, "Error", message)
     
     def create_reports_page(self):
         page = QWidget()
@@ -1081,6 +1113,8 @@ class ProductDialog(QDialog):
             self.product_model.add_product(name, desc, price, stock, category, threshold)
             QMessageBox.information(self, "Success", "Product added successfully!")
         
+        self.parent().refresh_products()
+        self.parent().refresh_dashboard() 
         self.accept()
 
 class CustomerDialog(QDialog):
@@ -1273,6 +1307,213 @@ class StaffDialog(QDialog):
         else:
             QMessageBox.critical(self, "Error", message)
 
+class DeletedRecordsDialog(QDialog):
+    """Dialog to view and restore deleted records"""
+    def __init__(self, db, parent, record_type, title):
+        super().__init__(parent)
+        self.db = db
+        self.record_type = record_type
+        self.parent_window = parent
+        
+        self.setWindowTitle(title)
+        self.setMinimumSize(800, 500)
+        self.setup_ui()
+        self.load_deleted_records()
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Title
+        title = QLabel(f"🗑️ {self.windowTitle()}")
+        title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        title.setStyleSheet("color: #f44336;")
+        layout.addWidget(title)
+        
+        # Info label
+        info = QLabel("Select a record and click 'Restore' to reactivate it.")
+        info.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(info)
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        layout.addWidget(self.table)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        restore_btn = QPushButton("♻️ Restore Selected")
+        restore_btn.setMinimumHeight(45)
+        restore_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        restore_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        restore_btn.clicked.connect(self.restore_selected)
+        button_layout.addWidget(restore_btn)
+        
+        close_btn = QPushButton("Close")
+        close_btn.setMinimumHeight(45)
+        close_btn.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9E9E9E;
+                color: white;
+                border-radius: 8px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #757575;
+            }
+        """)
+        close_btn.clicked.connect(self.accept)
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+    
+    def load_deleted_records(self):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        if self.record_type == "products":
+            self.table.setColumnCount(6)
+            self.table.setHorizontalHeaderLabels(["ID", "Name", "Category", "Price", "Stock", "Deleted At"])
+            
+            cursor.execute("""
+                SELECT product_id, name, category, price, stock, deleted_at 
+                FROM products 
+                WHERE is_active = 0
+                ORDER BY deleted_at DESC
+            """)
+            records = cursor.fetchall()
+            
+            self.table.setRowCount(len(records))
+            for row, record in enumerate(records):
+                self.table.setItem(row, 0, QTableWidgetItem(str(record[0])))
+                self.table.setItem(row, 1, QTableWidgetItem(record[1]))
+                self.table.setItem(row, 2, QTableWidgetItem(record[2] or ""))
+                self.table.setItem(row, 3, QTableWidgetItem(f"${record[3]:.2f}"))
+                self.table.setItem(row, 4, QTableWidgetItem(str(record[4])))
+                deleted_at = record[5].strftime("%Y-%m-%d %H:%M") if record[5] else "Unknown"
+                self.table.setItem(row, 5, QTableWidgetItem(deleted_at))
+        
+        elif self.record_type == "customers":
+            self.table.setColumnCount(6)
+            self.table.setHorizontalHeaderLabels(["ID", "Name", "Email", "Type", "Points", "Deleted At"])
+            
+            cursor.execute("""
+                SELECT customer_id, full_name, email, customer_type, loyalty_points, deleted_at 
+                FROM customers 
+                WHERE is_active = 0
+                ORDER BY deleted_at DESC
+            """)
+            records = cursor.fetchall()
+            
+            self.table.setRowCount(len(records))
+            for row, record in enumerate(records):
+                self.table.setItem(row, 0, QTableWidgetItem(str(record[0])))
+                self.table.setItem(row, 1, QTableWidgetItem(record[1]))
+                self.table.setItem(row, 2, QTableWidgetItem(record[2] or ""))
+                self.table.setItem(row, 3, QTableWidgetItem(record[3] or "regular"))
+                self.table.setItem(row, 4, QTableWidgetItem(str(record[4] or 0)))
+                deleted_at = record[5].strftime("%Y-%m-%d %H:%M") if record[5] else "Unknown"
+                self.table.setItem(row, 5, QTableWidgetItem(deleted_at))
+        
+        elif self.record_type == "staff":
+            self.table.setColumnCount(5)
+            self.table.setHorizontalHeaderLabels(["ID", "Username", "Full Name", "Role", "Deleted At"])
+            
+            cursor.execute("""
+                SELECT user_id, username, full_name, role, deleted_at 
+                FROM users 
+                WHERE is_active = 0 AND role != 'customer'
+                ORDER BY deleted_at DESC
+            """)
+            records = cursor.fetchall()
+            
+            self.table.setRowCount(len(records))
+            for row, record in enumerate(records):
+                self.table.setItem(row, 0, QTableWidgetItem(str(record[0])))
+                self.table.setItem(row, 1, QTableWidgetItem(record[1]))
+                self.table.setItem(row, 2, QTableWidgetItem(record[2]))
+                self.table.setItem(row, 3, QTableWidgetItem(record[3].upper()))
+                deleted_at = record[4].strftime("%Y-%m-%d %H:%M") if record[4] else "Unknown"
+                self.table.setItem(row, 4, QTableWidgetItem(deleted_at))
+        
+        conn.close()
+        
+        # Adjust column widths
+        self.table.horizontalHeader().setStretchLastSection(True)
+        for col in range(self.table.columnCount() - 1):
+            self.table.resizeColumnToContents(col)
+        
+        # Show message if no deleted records
+        if self.table.rowCount() == 0:
+            self.table.setRowCount(1)
+            self.table.setSpan(0, 0, 1, self.table.columnCount())
+            no_data = QTableWidgetItem("No deleted records found")
+            no_data.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            no_data.setForeground(QColor("#999"))
+            self.table.setItem(0, 0, no_data)
+    
+    def restore_selected(self):
+        selected = self.table.selectedItems()
+        if not selected:
+            QMessageBox.warning(self, "No Selection", "Please select a record to restore.")
+            return
+        
+        # Get the ID from the first column of selected row
+        row = selected[0].row()
+        id_item = self.table.item(row, 0)
+        
+        if not id_item or not id_item.text().isdigit():
+            QMessageBox.warning(self, "Error", "Invalid selection.")
+            return
+        
+        record_id = int(id_item.text())
+        
+        # Confirm restoration
+        reply = QMessageBox.question(
+            self,
+            "Confirm Restore",
+            "Are you sure you want to restore this record?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # Perform restoration based on record type
+        if self.record_type == "products":
+            from models import Product
+            model = Product(self.db)
+            success, message = model.restore_product(record_id)
+        elif self.record_type == "customers":
+            from models import Customer
+            model = Customer(self.db)
+            success, message = model.restore_customer(record_id)
+        elif self.record_type == "staff":
+            from models import StaffManagement
+            model = StaffManagement(self.db)
+            success, message = model.restore_staff(record_id)
+        else:
+            success, message = False, "Unknown record type"
+        
+        if success:
+            QMessageBox.information(self, "Success", message)
+            self.load_deleted_records()  # Refresh the list
+        else:
+            QMessageBox.critical(self, "Error", message)
 
 class StaffEditDialog(QDialog):
     def __init__(self, db, parent, staff_member):
