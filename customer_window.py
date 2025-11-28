@@ -1255,3 +1255,4 @@ class CustomerCheckoutDialog(QDialog):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Order failed: {str(e)}")
+
