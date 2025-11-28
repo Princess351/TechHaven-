@@ -50,13 +50,13 @@ class StaffWindow(QMainWindow):
         # Header
         header_layout = QHBoxLayout()
         title = QLabel("📦 Product Catalog")
-        title.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         title.setStyleSheet("color: #2196F3;")
         header_layout.addWidget(title)
         
         # User info display
         user_info = QLabel(f"👤 {self.user['full_name']} ({self.user['role'].upper()})")
-        user_info.setFont(QFont("Arial", 10))
+        user_info.setFont(QFont("Arial", 9))
         user_info.setStyleSheet("color: #666; padding: 5px 10px; background-color: #f0f0f0; border-radius: 5px;")
         header_layout.addWidget(user_info)
         
@@ -65,7 +65,7 @@ class StaffWindow(QMainWindow):
         # Search
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Search products")
-        self.search_input.setMinimumWidth(150)
+        self.search_input.setMinimumWidth(130)
         self.search_input.textChanged.connect(self.filter_products)
         header_layout.addWidget(self.search_input)
         
@@ -78,13 +78,21 @@ class StaffWindow(QMainWindow):
         header_layout.addWidget(self.category_filter)
         
         logout_btn = QPushButton("🚪 Logout")
-        logout_btn.setMaximumWidth(100)
+        logout_btn.setMaximumWidth(110)
+        logout_btn.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         logout_btn.clicked.connect(self.logout)
         header_layout.addWidget(logout_btn)
 
+        history_btn = QPushButton("📜 Sales History")
+        history_btn.setMaximumWidth(180)
+        history_btn.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        history_btn.clicked.connect(self.open_sales_history)
+        header_layout.addWidget(history_btn)
+
         # After the logout button
-        returns_btn = QPushButton("🔄 Returns/Refunds")
-        returns_btn.setMaximumWidth(150)
+        returns_btn = QPushButton("🔄Returns/Refunds")
+        returns_btn.setMaximumWidth(200)
+        returns_btn.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         returns_btn.clicked.connect(self.open_returns_dialog)
         header_layout.addWidget(returns_btn)
         
@@ -118,7 +126,68 @@ class StaffWindow(QMainWindow):
         self.load_products()
         return panel
 
-    
+    def open_sales_history(self):
+        dialog = SalesHistoryDialog(self.db, self)
+        dialog.exec()
+
+    def generate_receipt_content(self, transaction, items):
+        receipt = "=" * 60 + "\n"
+        receipt += "           🏪 TECHHAVEN ELECTRONIC STORE\n"
+        receipt += "         Your One-Stop Technology Shop\n"
+        receipt += "     123 Tech Avenue, Tech City, TC 12345\n"
+        receipt += "          Phone: (555) 123-4567\n"
+        receipt += "         Email: info@techhaven.com\n"
+        receipt += "=" * 60 + "\n\n"
+        
+        receipt += f"Transaction ID: {transaction[0]:06d}\n"
+        receipt += f"Date & Time: {transaction[8]}\n"
+        receipt += f"Customer: {transaction[9] if transaction[9] else 'Walk-in Customer'}\n"
+        receipt += f"Processed by: {transaction[10]}\n"
+        receipt += f"Payment Method: {transaction[6]}\n"
+        receipt += "-" * 60 + "\n\n"
+        
+        receipt += "ITEMS PURCHASED:\n"
+        receipt += "-" * 60 + "\n"
+        receipt += f"{'Item':<35} {'Qty':>5} {'Price':>8} {'Total':>10}\n"
+        receipt += "-" * 60 + "\n"
+        
+        for item in items:
+            item_name = item[6][:35]
+            receipt += f"{item_name:<35} {item[3]:>5} ${item[4]:>7.2f} ${item[5]:>9.2f}\n"
+        
+        subtotal = transaction[3] + transaction[4] - transaction[5]
+        
+        receipt += "-" * 60 + "\n"
+        receipt += f"{'Subtotal:':<50} ${subtotal:>8.2f}\n"
+        receipt += f"{'Discount:':<50} ${transaction[4]:>8.2f}\n"
+        receipt += f"{'Tax (10%):':<50} ${transaction[5]:>8.2f}\n"
+        receipt += "=" * 60 + "\n"
+        receipt += f"{'TOTAL AMOUNT:':<50} ${transaction[3]:>8.2f}\n"
+        receipt += "=" * 60 + "\n\n"
+        
+        receipt += "         Thank you for shopping with TechHaven!\n"
+        receipt += "      Visit us again for all your tech needs!\n"
+        receipt += "                www.techhaven.com\n"
+        receipt += "=" * 60 + "\n"
+        
+        receipt += "\nRETURN POLICY:\n"
+        receipt += "Products may be returned within 30 days with receipt\n"
+        receipt += "and in original packaging. Conditions apply.\n"
+        
+        return receipt
+
+
+    def print_receipt(self, content):
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+
+        if dialog.exec():
+            from PyQt6.QtGui import QTextDocument
+            doc = QTextDocument()
+            doc.setPlainText(content)
+            doc.print(printer)
+
+
     def create_cart_panel(self):
         panel = QWidget()
         panel.setObjectName("cartPanel")
@@ -131,11 +200,12 @@ class StaffWindow(QMainWindow):
         
         select_layout = QHBoxLayout()
         self.customer_label = QLabel("👤 Walk-in Customer")
-        self.customer_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        self.customer_label.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         select_layout.addWidget(self.customer_label)
         select_layout.addStretch()
         
         select_customer_btn = QPushButton("Select Customer")
+        select_customer_btn.setFont(QFont("Arial", 9, QFont.Weight.Bold))
         select_customer_btn.clicked.connect(self.select_customer)
         select_layout.addWidget(select_customer_btn)
         customer_layout.addLayout(select_layout)
@@ -893,14 +963,15 @@ class CheckoutDialog(QDialog):
         receipt_text.setReadOnly(True)
         receipt_text.setFont(QFont("Courier New", 10))
         
-        receipt_content = self.generate_receipt_content(transaction, items)
+        # ✅ FIX: call StaffWindow's method, NOT CheckoutDialog
+        receipt_content = self.parent().generate_receipt_content(transaction, items)
         receipt_text.setPlainText(receipt_content)
         
         layout.addWidget(receipt_text)
         
         button_layout = QHBoxLayout()
         print_btn = QPushButton("🖨️ Print")
-        print_btn.clicked.connect(lambda: self.print_receipt(receipt_content))
+        print_btn.clicked.connect(lambda: self.parent().print_receipt(receipt_content))
         button_layout.addWidget(print_btn)
         
         close_btn = QPushButton("Close")
@@ -910,56 +981,160 @@ class CheckoutDialog(QDialog):
         layout.addLayout(button_layout)
         
         receipt_dialog.exec()
-    
-    def generate_receipt_content(self, transaction, items):
-        receipt = "=" * 60 + "\n"
-        receipt += "           🏪 TECHHAVEN ELECTRONIC STORE\n"
-        receipt += "         Your One-Stop Technology Shop\n"
-        receipt += "     123 Tech Avenue, Tech City, TC 12345\n"
-        receipt += "          Phone: (555) 123-4567\n"
-        receipt += "         Email: info@techhaven.com\n"
-        receipt += "=" * 60 + "\n\n"
+
+
         
-        receipt += f"Transaction ID: {transaction[0]:06d}\n"
-        receipt += f"Date & Time: {transaction[8]}\n"
-        receipt += f"Customer: {transaction[9] if transaction[9] else 'Walk-in Customer'}\n"
-        receipt += f"Processed by: {transaction[10]}\n"  # Staff name clearly shown
-        receipt += f"Payment Method: {transaction[6]}\n"
-        receipt += "-" * 60 + "\n\n"
-        
-        receipt += "ITEMS PURCHASED:\n"
-        receipt += "-" * 60 + "\n"
-        receipt += f"{'Item':<35} {'Qty':>5} {'Price':>8} {'Total':>10}\n"
-        receipt += "-" * 60 + "\n"
-        
-        for item in items:
-            item_name = item[6][:35]  # Truncate long names
-            receipt += f"{item_name:<35} {item[3]:>5} ${item[4]:>7.2f} ${item[5]:>9.2f}\n"
-        
-        receipt += "-" * 60 + "\n"
-        receipt += f"{'Subtotal:':<50} ${self.subtotal:>8.2f}\n"
-        receipt += f"{'Discount:':<50} ${transaction[4]:>8.2f}\n"
-        receipt += f"{'Tax (10%):':<50} ${transaction[5]:>8.2f}\n"
-        receipt += "=" * 60 + "\n"
-        receipt += f"{'TOTAL AMOUNT:':<50} ${transaction[3]:>8.2f}\n"
-        receipt += "=" * 60 + "\n\n"
-        
-        receipt += "         Thank you for shopping with TechHaven!\n"
-        receipt += "      Visit us again for all your tech needs!\n"
-        receipt += "                www.techhaven.com\n"
-        receipt += "=" * 60 + "\n"
-        
-        # Return policy
-        receipt += "\nRETURN POLICY:\n"
-        receipt += "Products may be returned within 30 days with receipt\n"
-        receipt += "and in original packaging. Conditions apply.\n"
-        
-        return receipt
-    
     def print_receipt(self, content):
-        printer = QPrinter()
-        dialog = QPrintDialog(printer, self)
-        if dialog.exec():
-            document = QTextEdit()
-            document.setPlainText(content)
-            document.print_(printer)
+            printer = QPrinter()
+            dialog = QPrintDialog(printer, self)
+
+            if dialog.exec():
+                from PyQt6.QtGui import QTextDocument
+                doc = QTextDocument()
+                doc.setPlainText(content)
+                doc.print(printer)   # ✔ PyQt6 valid print method
+
+class SalesHistoryDialog(QDialog):
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.transaction_model = Transaction(db)
+
+        self.setWindowTitle("Sales History")
+        self.setMinimumSize(900, 600)
+        self.setup_ui()
+        self.load_transactions()
+
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # ---- Search bar ----
+        search_layout = QHBoxLayout()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search by Transaction ID / Customer / Staff / Payment Method")
+        self.search_input.textChanged.connect(self.filter_transactions)
+        search_layout.addWidget(self.search_input)
+        layout.addLayout(search_layout)
+
+       # ---- Table ----
+        self.table = QTableWidget()
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels([
+            "ID", "Date", "Customer", "Staff", "Amount", "Payment", "Type"
+        ])
+
+        # FIX: Use ResizeMode
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.doubleClicked.connect(self.open_receipt)
+        layout.addWidget(self.table)
+
+
+        # ---- Buttons ----
+        btn_layout = QHBoxLayout()
+
+        export_btn = QPushButton("⬇ Export CSV")
+        export_btn.clicked.connect(self.export_csv)
+        btn_layout.addWidget(export_btn)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.close)
+        btn_layout.addWidget(close_btn)
+
+        layout.addLayout(btn_layout)
+
+    # --------------------------------------------------
+    def load_transactions(self):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT 
+                t.transaction_id, t.transaction_date, 
+                COALESCE(c.full_name, 'Walk-in') AS customer,
+                u.full_name AS staff,
+                t.total_amount, t.payment_method, t.transaction_type
+            FROM transactions t
+            LEFT JOIN customers c ON t.customer_id = c.customer_id
+            LEFT JOIN users u ON t.staff_id = u.user_id
+            ORDER BY t.transaction_date DESC
+        """)
+
+        self.all_transactions = cursor.fetchall()
+        conn.close()
+
+        self.display_transactions(self.all_transactions)
+
+    # --------------------------------------------------
+    def display_transactions(self, data):
+        self.table.setRowCount(len(data))
+
+        for row, tx in enumerate(data):
+            for col, value in enumerate(tx):
+                self.table.setItem(row, col, QTableWidgetItem(str(value)))
+
+    # --------------------------------------------------
+    def filter_transactions(self):
+        text = self.search_input.text().lower()
+
+        filtered = [
+            tx for tx in self.all_transactions
+            if text in str(tx[0]).lower()
+            or text in str(tx[2]).lower()
+            or text in str(tx[3]).lower()
+            or text in str(tx[5]).lower()
+            or text in str(tx[6]).lower()
+        ]
+        self.display_transactions(filtered)
+
+    # --------------------------------------------------
+    def open_receipt(self):
+        row = self.table.currentRow()
+        tx_id = int(self.table.item(row, 0).text())
+
+        # Reuse your existing receipt generator
+        transaction, items = self.transaction_model.get_transaction(tx_id)
+
+        receipt_text = self.parent().generate_receipt_content(transaction, items)
+
+        receipt_dialog = QDialog(self)
+        receipt_dialog.setWindowTitle(f"Receipt #{tx_id}")
+        receipt_dialog.setMinimumSize(500, 600)
+
+        layout = QVBoxLayout(receipt_dialog)
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setFont(QFont("Courier New", 10))
+        text.setPlainText(receipt_text)
+        layout.addWidget(text)
+
+        print_btn = QPushButton("🖨 Print")
+        print_btn.clicked.connect(lambda: self.parent().print_receipt(receipt_text))
+        layout.addWidget(print_btn)
+
+        close = QPushButton("Close")
+        close.clicked.connect(receipt_dialog.accept)
+        layout.addWidget(close)
+
+        receipt_dialog.exec()
+
+    # --------------------------------------------------
+    def export_csv(self):
+        import csv
+        from PyQt6.QtWidgets import QFileDialog
+
+        path, _ = QFileDialog.getSaveFileName(self, "Save Sales History", "", "CSV (*.csv)")
+        if not path:
+            return
+
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID", "Date", "Customer", "Staff", "Amount", "Payment", "Type"])
+            for tx in self.all_transactions:
+                writer.writerow(tx)
+
+        QMessageBox.information(self, "Exported", "Sales history saved successfully!")
+
+
