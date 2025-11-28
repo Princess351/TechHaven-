@@ -1137,4 +1137,3 @@ class SalesHistoryDialog(QDialog):
 
         QMessageBox.information(self, "Exported", "Sales history saved successfully!")
 
-
